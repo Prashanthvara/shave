@@ -139,13 +139,17 @@ def _validate_row(row: CrosswalkRow, src: Path, lineno: int) -> None:
                 "ComStock models 14 types; anything else must be source=modeled."
             )
     elif row.source == "modeled":
-        if row.archetype not in MODELED_TYPES:
-            raise CrosswalkError(f"{where} archetype {row.archetype!r} is not a known modeled type")
+        # Order matters. The ComStock check comes first so a row that tries to
+        # model something NREL already measures gets the specific reason rather
+        # than the generic "unknown type". Behind the MODELED_TYPES guard this
+        # branch was unreachable, since the two sets are disjoint.
         if row.archetype in COMSTOCK_TYPES:
             raise CrosswalkError(
                 f"{where} archetype {row.archetype!r} is measured by ComStock; "
                 "do not model what NREL already covers"
             )
+        if row.archetype not in MODELED_TYPES:
+            raise CrosswalkError(f"{where} archetype {row.archetype!r} is not a known modeled type")
     else:
         raise CrosswalkError(f"{where} source must be 'comstock' or 'modeled', got {row.source!r}")
 
