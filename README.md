@@ -1,0 +1,93 @@
+# Shave
+
+Ranks Massachusetts commercial and industrial buildings by how much of their
+monthly billed electrical demand a 250 kW / 522 kWh battery could actually
+absorb, and what that saves at the filed tariff rate.
+
+It scores sites **before** anyone picks up the phone. The industry sequence is
+talk, then ask for a utility bill, then decide. This inverts that.
+
+## What it is, and what it is not
+
+This tool has never seen a meter. It is a **structured prior** over three public
+assessor fields plus a modelled load-shape library. Its value is that the prior
+is non-obvious and cheap, not that it is a measurement.
+
+Use it to order a call list. Do not use it to underwrite a project.
+
+## Why the small building often wins
+
+Two numbers from National Grid's Massachusetts tariff:
+
+| Rate | Eligibility | Distribution demand charge |
+|---|---|---|
+| G-2 | max demand under 200 kW | **$15.06 / kW** |
+| G-3 | 12-month *average* at or above 200 kW | **$10.48 / kW** |
+
+G-2 costs 44% more per kW than G-3. A 180 kW site on G-2 pays more in demand
+charges than a 250 kW site on G-3.
+
+Then stack the energy budget. The battery holds 522 kWh nameplate, about 413 kWh
+usable, which is roughly two hours at full power. A hospital's monthly peak is a
+six-hour plateau and the battery runs flat before it ends. A machine shop's peak
+is a twenty-minute inrush at shift start and the battery barely notices.
+
+So the target is a mid-size site with a spiky weekday load, not the biggest
+building on the block. That falls out of the tariff and the physics rather than
+being asserted.
+
+## Billing determinant
+
+From the filed tariff, M.D.P.U. No. 1591:
+
+> The Demand for each month shall be the greater of: a) The greatest
+> fifteen-minute peak occurring during the Peak hours period within such a month
+> as measured in kilowatts, or b) 90% of the greatest fifteen-minute peak
+> occurring during the Peak hours period, of such month as measured in
+> kilovolt-amperes.
+
+Peak hours are 8:00 a.m. to 9:00 p.m., Monday to Friday, excluding nine observed
+holidays. A three-in-the-morning spike is free, so every calculation here runs
+inside that window and nowhere else.
+
+## Layout
+
+```
+src/shave/
+  assumptions.py     every constant, with source and provenance. The method
+                     page renders from this file, so published values cannot
+                     drift from computed ones.
+  billing_window.py  the tariff calendar. Nine holidays, observed-day shifts,
+                     vectorised interval mask.
+  scorer.py          root-find for the shave threshold, monthly-max loop,
+                     rate class, recharge feasibility, annual saving.
+  archetype.py       one interface over two load-shape sources: measured
+                     (NREL ComStock) and modelled (industrial synthesis).
+```
+
+## Data sources
+
+- **MassGIS L3 Standardized Assessors' Parcels** and **STRUCTURES_POLY** roofprints
+- **NREL ComStock** end-use load profiles, queried in place from `s3://oedi-data-lake`
+- **National Grid MECO** filed tariff and published class average load shapes
+
+## Known limits
+
+- Multi-tenant buildings are overstated. Demand accrues to a service account, not
+  a building.
+- Industrial load shapes are modelled, not measured. ComStock covers 14 commercial
+  building types and explicitly excludes laboratories, data centers and ice rinks.
+  That is the weakest link and it is not close.
+- The siting screen rules out the impossible. It cannot see loading docks, fire
+  lanes or egress.
+- Assessor vintage differs by municipality. Two towns in the same ranking are not
+  necessarily measured in the same year.
+- Only the distribution demand charge is counted. Transmission is billed per kWh,
+  and the ISO-NE capacity tag sits outside this model.
+
+## Development
+
+```sh
+uv sync
+uv run pytest
+```

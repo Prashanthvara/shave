@@ -1,0 +1,28 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# node / worker
+node_modules/
+.wrangler/
+dist/
+
+# secrets
+.dev.vars
+.env
+*.env.local
+
+# pipeline artifacts — large, regenerable, never committed
+data/raw/
+data/interim/
+*.gdb/
+*.gpkg
+*.parquet
+*.zip
+
+# tooling noise
+.playwright-mcp/
+.DS_Store
+.claude/settings.local.json
