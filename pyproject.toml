@@ -28,6 +28,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/shave"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/shave/crosswalk.csv" = "shave/crosswalk.csv"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
