@@ -34,4 +34,7 @@ packages = ["src/shave"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-q"
+markers = [
+    "network: hits NREL's S3 bucket over the network; deselect with -m 'not network'",
+]
+addopts = "-q -m 'not network'"
