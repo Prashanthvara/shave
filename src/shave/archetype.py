@@ -41,6 +41,15 @@ Source = Literal["comstock", "modeled"]
 INTERVALS_PER_BILLED_DAY = (PEAK_HOUR_END - PEAK_HOUR_START) * 60 // INTERVAL_MINUTES
 DAY_TYPES = ("weekday", "saturday", "sunday")
 
+#: Interval width in hours, and the full 24-hour grid at that resolution.
+#: The full day lives here beside the billed window because it is a property
+#: of the tariff interval, not of the modelled library. `modeled` re-exports
+#: FULL_DAY_HOURS; defining it there would force this module to import that
+#: one, which imports this one.
+STEP_HOURS = INTERVAL_MINUTES / 60.0
+INTERVALS_PER_DAY = int(round(24.0 / STEP_HOURS))
+FULL_DAY_HOURS = np.arange(0.0, 24.0, STEP_HOURS)
+
 # Massachusetts cooling-degree-day shape, normalised to its own max. Drives the
 # seasonal scaling of cooling and refrigeration load. Jan through Dec.
 MA_COOLING_SHAPE = np.array(
@@ -111,10 +120,26 @@ class ModeledArchetype:
         step = INTERVAL_MINUTES / 60.0
         return PEAK_HOUR_START + np.arange(INTERVALS_PER_BILLED_DAY) * step
 
-    def _day_shape(self, day_type: str, month: int) -> np.ndarray:
-        """Normalised 0-1 load across the billed window for one day type."""
-        hours = self._window_hours()
-        base = np.full(INTERVALS_PER_BILLED_DAY, self.base_fraction)
+    def _day_shape(
+        self, day_type: str, month: int, hours: np.ndarray | None = None
+    ) -> np.ndarray:
+        """Normalised 0-1 load across `hours` for one day type.
+
+        `hours` defaults to the billed window. `modeled.full_day_shape` passes
+        a 24-hour grid so the magnitude chain measures the same shape the
+        scorer reads, rather than a second implementation of it.
+        """
+        hours = self._window_hours() if hours is None else np.asarray(hours, dtype=float)
+
+        # Jitter is a shift in TIME, not a roll of the array. A roll permutes
+        # whichever grid it is handed, so the same parcel's peak could land
+        # inside the billed window on the 52-point grid and outside it on the
+        # 96-point one -- the window would not be a slice of the day, and the
+        # full-day maximum that scales billed demand could not be compared
+        # with it. Shifting the evaluation hours makes the shape one function
+        # of clock time, identical on every grid.
+        hours = hours - _jitter_offset(self.parcel_id) * STEP_HOURS
+        base = np.full(hours.size, self.base_fraction)
 
         if day_type == "sunday":
             shape = base.copy()
@@ -136,28 +161,63 @@ class ModeledArchetype:
 
         if self.refrigeration:
             # Compressors cycling. Adds sawtooth on top of everything else.
-            shape = shape + 0.12 * np.abs(np.sin(np.arange(INTERVALS_PER_BILLED_DAY) * 1.1))
+            # Indexed by clock time, not array position: an index-based term
+            # is a different function of time on each grid.
+            shape = shape + 0.12 * np.abs(np.sin((hours / STEP_HOURS) * 1.1))
 
         # Weather-driven component, scaled by the month.
         seasonal = 1.0 + self.cooling_fraction * (MA_COOLING_SHAPE[month - 1] - 0.5)
         shape = shape * seasonal
 
-        offset = _jitter_offset(self.parcel_id)
-        if offset:
-            shape = np.roll(shape, offset)
-
         return np.clip(shape, 0.0, None)
+
+    def _annual_max_shape(self) -> float:
+        """The normalised annual maximum, measured over the FULL 24 hours.
+
+        `peak_kw` is the building's true annual peak: `modeled.peak_kw_for`
+        derives it by dividing annual energy by a load factor computed against
+        the full-day peak. Scaling the billed window by a window-only maximum
+        would silently redefine the same number as the *billed* peak, and
+        inflate billed demand wherever a building's real peak falls outside
+        08:00-21:00 -- 1.55x for a machine shop whose shift starts at 06:30,
+        1.22x for a cold store starting at 06:00.
+
+        An unbilled peak must never set billed magnitude. That is the same
+        rule the measured half already follows, where the reducers mask to
+        billed intervals before taking a monthly maximum.
+        """
+        return max(
+            float(self._day_shape("weekday", m, hours=FULL_DAY_HOURS).max())
+            for m in range(1, 13)
+        )
 
     def peak_day_window(self, month: int) -> np.ndarray:
         if not 1 <= month <= 12:
             raise ValueError(f"month must be 1-12, got {month}")
         shape = self._day_shape("weekday", month)
-        mx = shape.max()
-        if mx <= 0:
+        if shape.max() <= 0:
             return np.zeros(INTERVALS_PER_BILLED_DAY)
-        # Scale so the annual worst month hits peak_kw exactly.
-        annual_max = max(self._day_shape("weekday", m).max() for m in range(1, 13))
+        annual_max = self._annual_max_shape()
+        if annual_max <= 0:
+            return np.zeros(INTERVALS_PER_BILLED_DAY)
         return shape * (self.peak_kw / annual_max)
+
+    def offpeak_max(self, month: int) -> float:
+        """Highest load in the 21:00-08:00 recharge window, in kW.
+
+        Uses the weekday shape: a weekday night is the one that has to absorb
+        the recharge, and it carries the highest base of the three day types.
+        """
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be 1-12, got {month}")
+        shape = self._day_shape("weekday", month, hours=FULL_DAY_HOURS)
+        night = (FULL_DAY_HOURS >= PEAK_HOUR_END) | (FULL_DAY_HOURS < PEAK_HOUR_START)
+        # Same denominator as peak_day_window, so the overnight figure and the
+        # billed peak are on one scale and comparable.
+        annual_max = self._annual_max_shape()
+        if annual_max <= 0:
+            return 0.0
+        return float(shape[night].max() * (self.peak_kw / annual_max))
 
     def monthly_peaks(self) -> np.ndarray:
         return np.array([self.peak_day_window(m).max() for m in range(1, 13)])

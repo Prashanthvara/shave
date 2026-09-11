@@ -66,6 +66,11 @@ PEAK_HOUR_END = 21
 # month as measured in kilowatts, or b) 90% of the greatest fifteen-minute
 # peak ... as measured in kilovolt-amperes."
 INTERVAL_MINUTES = 15
+
+#: Hours in a non-leap year. The annual-intensity to peak-kW conversion
+#: divides by this; using 8784 in a leap year would move every modelled
+#: magnitude by 0.3%, which is far inside the error of the intensity itself.
+HOURS_PER_YEAR = 8760.0
 KVA_CLAUSE_FACTOR = 0.90  # not modelled; recorded so the omission is visible
 
 # --------------------------------------------------------------------------
@@ -158,6 +163,70 @@ def comstock_glob() -> str:
 
 
 # --------------------------------------------------------------------------
+# Electricity intensity anchors for the modelled half of the library.
+#
+# ComStock models 14 commercial building types and explicitly excludes
+# laboratories, data centers, movie theatres and ice rinks; it models no
+# industry at all. For everything it does not cover, magnitude comes from
+# published intensity and shape comes from the parameters in modeled.py.
+# Shape and magnitude are deliberately sourced separately: the industrial
+# shape literature is non-US, so its shapes transfer and its magnitudes
+# do not.
+#
+# Every figure below was read out of the source workbook and re-derived on
+# 2026-09-11, not quoted from memory:
+#
+# CBECS 2018 Table C22, "Electricity consumption totals and conditional
+#   intensities by building activity subcategories, 2018" (released December
+#   2022), column "Site electricity consumption / Per square foot (kWh)":
+#   eia.gov/consumption/commercial/data/2018/ce/xls/c22.xlsx
+# MECS 2018 Table 3.2 "Fuel Consumption, 2018", column "Net Electricity(b)",
+#   trillion Btu (released February 2021), over Table 9.1 "Enclosed
+#   Floorspace", million square feet (released September 2021):
+#   eia.gov/consumption/manufacturing/data/2018/xls/Table3_2.xlsx
+#   eia.gov/consumption/manufacturing/data/2018/xls/Table9_1.xlsx
+# --------------------------------------------------------------------------
+
+BTU_PER_KWH = 3412.0
+
+ELECTRIC_INTENSITY_KWH_PER_SQFT_YR: dict[str, float] = {
+    # MECS NAICS 332 Fabricated Metal Products: 124 trillion Btu net
+    # electricity over 1,530 million sq ft = 23.75. NAICS 333 Machinery:
+    # 80 over 1,021 = 22.96. The machine shops and metal fabricators of
+    # Worcester are 332/333; the mean of the two, 23.36, is the anchor.
+    "industrial_manufacturing": 23.4,
+    # CBECS C22 "Refrigerated" (under Warehouse and storage), 29.6 kWh/sq ft.
+    # Cold storage is the ICP sector this stands in for. Note the contrast
+    # with "Nonrefrigerated" at 5.3 in the same table: refrigeration is about
+    # 5.6x the intensity, which is why collapsing both into use code 4010 is
+    # a stated weakness rather than a detail.
+    "industrial_warehouse_process": 29.6,
+    # CBECS C22 "Laboratory", 32.1 kWh/sq ft. The highest anchor here.
+    "laboratory": 32.1,
+    # CBECS C22 "Recreation", 13.0 kWh/sq ft. A weak proxy: CBECS has no
+    # ice-rink category and a sheet of ice is nothing like a gymnasium.
+    # Named as the weakest anchor on the method page.
+    "ice_rink": 13.0,
+    # CBECS C22 "Vehicle service or repair", 6.1 kWh/sq ft.
+    "auto_service": 6.1,
+    # CBECS C22 "Other retail", 15.2 kWh/sq ft. A dealership is showroom plus
+    # service bay; "Other retail" is the closest published activity.
+    "auto_dealership": 15.2,
+    # CBECS C22 "College or university", 12.6 kWh/sq ft.
+    "university": 12.6,
+}
+
+#: Modelled archetypes with no defensible published intensity. Rows carrying
+#: these are exported UNSCORED with this named reason rather than given an
+#: invented number. CBECS has no data-center activity category, and published
+#: per-square-foot figures for data halls vary by more than an order of
+#: magnitude with rack density, which is not in the assessor record. Six
+#: Worcester parcels. Data centers are also absent from the published ICP, so
+#: the cost of not scoring them is close to zero.
+UNANCHORED_ARCHETYPES: frozenset[str] = frozenset({"data_hall"})
+
+
+# --------------------------------------------------------------------------
 # The published table. Ordering here is the ordering on the method page.
 # --------------------------------------------------------------------------
 
@@ -240,6 +309,57 @@ PUBLISHED: tuple[Assumption, ...] = (
         "NREL OEDI",
         "AMY2018 weather. Pinned: release and weather year change which day "
         "is the peak day, which changes every score.",
+    ),
+    Assumption(
+        "intensity_industrial_manufacturing",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["industrial_manufacturing"],
+        "kWh/sq ft/yr", "DERIVED", "EIA MECS 2018 Tables 3.2 and 9.1",
+        'Mean of NAICS 332 Fabricated Metal Products (124 trillion Btu net electricity over 1,530 million sq ft = 23.75) and NAICS 333 Machinery (80 over 1,021 = 22.96), the two subsectors the machine shops and metal fabricators of Worcester sit in. DERIVED rather than FILED: the Btu-to-kWh conversion and the two-subsector mean are both choices.',
+    ),
+    Assumption(
+        "intensity_industrial_warehouse_process",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["industrial_warehouse_process"],
+        "kWh/sq ft/yr", "FILED", "EIA CBECS 2018 Table C22",
+        "CBECS activity 'Refrigerated' warehouse. Nonrefrigerated warehouse is 5.3 in the same table, so use code 4010 spans a 5.6x intensity range that the assessor record cannot separate.",
+    ),
+    Assumption(
+        "intensity_laboratory",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["laboratory"],
+        "kWh/sq ft/yr", "FILED", "EIA CBECS 2018 Table C22",
+        "CBECS activity 'Laboratory'. ComStock explicitly excludes laboratories, which is why this archetype is modelled at all.",
+    ),
+    Assumption(
+        "intensity_ice_rink",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["ice_rink"],
+        "kWh/sq ft/yr", "FILED", "EIA CBECS 2018 Table C22",
+        "CBECS activity 'Recreation'. THE WEAKEST ANCHOR IN THIS TABLE: CBECS has no ice-rink category, and a sheet of ice under continuous refrigeration is nothing like a gymnasium. Rink rankings are indicative only.",
+    ),
+    Assumption(
+        "intensity_auto_service",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["auto_service"],
+        "kWh/sq ft/yr", "FILED", "EIA CBECS 2018 Table C22",
+        "CBECS activity 'Vehicle service or repair'.",
+    ),
+    Assumption(
+        "intensity_auto_dealership",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["auto_dealership"],
+        "kWh/sq ft/yr", "FILED", "EIA CBECS 2018 Table C22",
+        "CBECS activity 'Other retail'. A dealership is showroom plus service bay; 'Other retail' is the closest published activity.",
+    ),
+    Assumption(
+        "intensity_university",
+        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["university"],
+        "kWh/sq ft/yr", "FILED", "EIA CBECS 2018 Table C22",
+        "CBECS activity 'College or university'.",
+    ),
+    Assumption(
+        "unanchored_archetypes", ", ".join(sorted(UNANCHORED_ARCHETYPES)), "",
+        "ASSUMED", "no published intensity",
+        "Modelled archetypes with no defensible published intensity. "
+        "Exported UNSCORED with the reason named rather than given an "
+        "invented number. CBECS has no data-center category and published "
+        "data-hall intensities vary by over an order of magnitude with rack "
+        "density, which is not in the assessor record.",
     ),
 )
 
