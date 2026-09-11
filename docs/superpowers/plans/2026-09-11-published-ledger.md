@@ -107,9 +107,16 @@ confidence_reasons, multi_meter, assess_fy`.
 
 ## Task 1: The site's data contract
 
-The page must never compute. Every number it shows is handed to it, so the argument on screen is
-provably the argument the scorer made. This task produces the two JSON files and a test that
-fails if the page's inputs change shape.
+The page must never compute, and there must be exactly one implementation of the export
+contract. `export.build_export` from first-ranked-list Task 5 **is** that implementation; this
+task is a thin adapter over it, not a second derivation.
+
+**The two lists are never merged.** The spec, twice (lines 276-280 and 622): *"industrial rows
+are never dollar-compared against ComStock rows. The interface ships two ranked lists side by
+side, each ranked on dollars within itself, never merged into one number."* The modelled
+magnitude runs through a published intensity and a derived load factor; ComStock's runs through a
+measured timeseries. The approved mockup defaults to a merged "All sources" view and is wrong on
+this point; the spec wins, and the page explains why rather than hiding the split.
 
 **Files:**
 - Create: `src/shave/site_data.py`
@@ -117,62 +124,99 @@ fails if the page's inputs change shape.
 - Test: `tests/test_site_data.py` (new)
 
 **Interfaces:**
-- Consumes: `pipeline.score_parcels`, `occupants.attach`, `method.method_payload`, `ingest.load_municipality`, `export.build_export` (from first-ranked-list Task 5).
+- Consumes: `export.build_export`, `export.SCHEMA_VERSION`, `occupants.load`, `method.method_payload`, `pipeline.score_parcels`, `ingest.load_municipality`.
 - Produces:
   - `site_data.SITE_SCHEMA_VERSION: str = "1.0.0"`
-  - `site_data.ROW_FIELDS: tuple[str, ...]`
-  - `site_data.build_rows(scored: pd.DataFrame, parcels: pd.DataFrame, limit: int = 200) -> list[dict]`
-  - `site_data.reason_for(row: Mapping) -> str`
-  - `site_data.build_site_payload(scored, parcels, regression=None, limit=200) -> dict`
+  - `site_data.ADDED_ROW_FIELDS: tuple[str, ...]`
+  - `site_data.REQUIRED_ROW_FIELDS: tuple[str, ...]`
+  - `site_data.window_series(row: Mapping) -> list[float]`
+  - `site_data.enrich(export_payload: dict, scored: pd.DataFrame) -> dict`
 
-- [ ] **Step 1: Write the failing test for the reason sentence**
+- [ ] **Step 1: Write the failing tests**
 
 Create `tests/test_site_data.py`:
 
 ```python
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from shave import site_data
 
+WORCESTER_DIR = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
+needs_worcester = pytest.mark.skipif(
+    not Path(WORCESTER_DIR + "/M348TaxPar_CY26_FY26.shp").exists(),
+    reason="Worcester L3 extract not present (data/raw is gitignored)",
+)
 
-def _row(**over):
-    base = {
-        "loc_id": "F_1", "occupant": "Fremont Cutting & Tool",
-        "site_addr": "84 GRAFTON ST", "city": "WORCESTER",
-        "owner": "84 GRAFTON REALTY LLC", "use_desc": "Buildings for manufacturing operations",
-        "archetype": "industrial_manufacturing", "source": "modeled",
-        "sqft": 41200.0, "avg_12mo_kw": 86.0, "peak_kw": 248.0, "peak_to_avg": 2.9,
-        "rate_class": "G-2", "demand_charge_per_kw": 15.06,
-        "annual_savings_usd": 34800.0, "shaved_fraction": 0.62,
-        "monthly_shaveable_kw": [188.0] * 12,
-        "confidence": "HIGH", "flags": [], "sweet_spot": True,
+
+def test_window_series_normalises_to_the_years_own_peak():
+    """The page scales a 0-1 series to pixels and does no other arithmetic."""
+    row = {"monthly_billed_demand_kw": [50.0, 100.0, 200.0] + [100.0] * 9}
+    series = site_data.window_series(row)
+
+    assert len(series) == 12
+    assert max(series) == 1.0
+    assert series[0] == pytest.approx(0.25)
+
+
+def test_window_series_survives_a_month_with_no_billed_demand():
+    """A month with no billed days bills nothing. That must not divide by zero."""
+    assert site_data.window_series({"monthly_billed_demand_kw": [0.0] * 12}) == [0.0] * 12
+
+
+def test_enrich_keeps_the_two_lists_separate_and_adds_what_the_page_needs():
+    """The spec forbids merging the lists. enrich must not flatten them."""
+    payload = {
+        "schema_version": "1.0.0",
+        "counts": {"kept": 2},
+        "lists": {
+            "comstock": [{
+                "loc_id": "L1", "rank": 1, "annual_savings_usd": 9000.0,
+                "monthly_billed_demand_kw": [100.0] * 12,
+                "monthly_shaveable_kw": [30.0] * 12, "reason": "Because.",
+            }],
+            "modeled": [{
+                "loc_id": "L2", "rank": 1, "annual_savings_usd": 12000.0,
+                "monthly_billed_demand_kw": [80.0] * 12,
+                "monthly_shaveable_kw": [25.0] * 12, "reason": "Because.",
+            }],
+        },
     }
-    base.update(over)
-    return base
+
+    out = site_data.enrich(payload, pd.DataFrame([{"keep": True, "sweet_spot": False,
+                                                  "unscored_reason": None,
+                                                  "annual_savings_usd": 1.0,
+                                                  "loc_id": "L1"}]))
+
+    assert set(out["lists"]) == {"comstock", "modeled"}
+    assert [r["loc_id"] for r in out["lists"]["comstock"]] == ["L1"]
+    assert [r["loc_id"] for r in out["lists"]["modeled"]] == ["L2"]
+    assert out["lists"]["comstock"][0]["rank"] == 1
+    assert out["lists"]["modeled"][0]["rank"] == 1, "ranks restart per list"
+    for row in out["lists"]["comstock"] + out["lists"]["modeled"]:
+        assert len(row["window_kw"]) == 12
+        assert "occupant" in row and "occupant_source" in row
+    assert "method" in out
+    assert out["site_schema_version"] == site_data.SITE_SCHEMA_VERSION
 
 
-def test_the_reason_names_the_shape_the_rate_and_the_money():
-    """The spec's thirty-second payload: the top row must be defensible in one
-    sentence a domain expert can check."""
-    text = site_data.reason_for(_row())
+def test_enrich_does_not_mutate_the_export_it_was_given():
+    payload = {"schema_version": "1.0.0", "counts": {}, "lists": {"comstock": [
+        {"loc_id": "L1", "rank": 1, "monthly_billed_demand_kw": [1.0] * 12,
+         "monthly_shaveable_kw": [1.0] * 12}], "modeled": []}}
+    before = json.dumps(payload, sort_keys=True)
 
-    assert "2.9" in text, "the spikiness ratio is the argument"
-    assert "G-2" in text
-    assert "15.06" in text, "the rate that makes G-2 the expensive one"
-    assert "188" in text, "the kW actually removed"
-    assert text.endswith(".")
+    site_data.enrich(payload, pd.DataFrame([{"keep": True, "sweet_spot": False,
+                                             "unscored_reason": None,
+                                             "annual_savings_usd": 1.0, "loc_id": "L1"}]))
 
-
-def test_the_reason_says_when_a_site_is_flat_rather_than_claiming_a_spike():
-    text = site_data.reason_for(_row(peak_to_avg=1.1, shaved_fraction=0.08,
-                                     monthly_shaveable_kw=[12.0] * 12))
-    assert "flat" in text.lower()
+    assert json.dumps(payload, sort_keys=True) == before
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [ ] **Step 2: Run them to verify they fail**
 
 Run: `uv run pytest tests/test_site_data.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'shave.site_data'`
@@ -180,165 +224,96 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'shave.site_data'`
 - [ ] **Step 3: Write `src/shave/site_data.py`**
 
 ```python
-"""Exactly what the page reads, and nothing it has to compute.
+"""What the page reads, adapted from the one export contract.
 
-The page must never do arithmetic. Every figure it shows is handed to it here,
-so the sentence on screen is provably the sentence the scorer's numbers
-support. A template that recomputed anything would be a second implementation
-of the scoring function written in JavaScript, and the two would drift.
+`export.build_export` is the single implementation of the ranked payload. This
+module does not re-derive it: it takes that payload, adds the three things the
+page needs and the export has no business carrying -- the hand-resolved
+occupant, a normalised sparkline series, and the method payload -- and returns
+the result. A second derivation here would be a second place for the schema to
+drift, which is the failure the versioned contract exists to prevent.
 
-`reason_for` is the templated one-sentence argument the design review (D4)
-required to be inline on the selected row rather than behind a click. It is a
-template, not an agent: it states the ratio, the rate, the kilowatts and the
-dollars, all of which are checkable against the row beside it.
+THE TWO LISTS ARE NEVER MERGED. The modelled-industrial magnitude runs through
+a published intensity and a load factor derived from a declared shape; the
+ComStock magnitude runs through a measured timeseries. Ranking them against
+each other in dollars would claim a comparability the data does not support,
+so each is ranked within itself and the page says why.
 """
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 
 import pandas as pd
 
 from shave import method, occupants
-from shave.assumptions import SWEET_SPOT_PEAK_TO_AVG
 
 #: Bumped when the page's contract changes. The page refuses to render a
 #: payload whose major version it does not recognise, so a stale deploy fails
 #: loudly instead of drawing wrong numbers.
 SITE_SCHEMA_VERSION = "1.0.0"
 
-#: Every field the page reads. `tests/test_site_data.py` asserts each one is
-#: present on every row, so a rename in the pipeline breaks the build rather
-#: than the browser.
-ROW_FIELDS: tuple[str, ...] = (
-    "loc_id", "rank", "occupant", "occupant_source", "owner", "site_addr",
-    "city", "use_desc", "archetype", "source", "sqft", "avg_12mo_kw",
-    "peak_kw", "peak_to_avg", "rate_class", "demand_charge_per_kw",
-    "annual_savings_usd", "shaved_fraction", "shaveable_kw", "confidence",
-    "flags", "sweet_spot", "reason", "window_kw",
+#: What this module adds on top of an exported row.
+ADDED_ROW_FIELDS: tuple[str, ...] = (
+    "occupant", "occupant_source", "window_kw", "shaveable_kw",
 )
 
-def _money(value: float) -> str:
-    return f"${value:,.0f}"
+#: What the page reads off every row. Everything but ADDED_ROW_FIELDS comes
+#: from `export.build_export`; the test asserts all of it is present, so a
+#: rename in the pipeline or the export breaks the build, not the browser.
+REQUIRED_ROW_FIELDS: tuple[str, ...] = (
+    "loc_id", "rank", "reason", "archetype", "source", "sqft", "avg_12mo_kw",
+    "peak_kw", "peak_to_avg", "rate_class", "demand_charge_per_kw",
+    "annual_savings_usd", "shaved_fraction", "confidence", "flags",
+    "sweet_spot", "site_addr", "city", "owner", "use_desc",
+) + ADDED_ROW_FIELDS
 
 
-def reason_for(row: Mapping) -> str:
-    """One checkable sentence. Template, not prose.
+def window_series(row: Mapping) -> list[float]:
+    """The twelve monthly billed peaks, normalised to the year's own maximum.
 
-    Every quantity in it appears in the row beside it, which is what makes it
-    checkable rather than persuasive.
+    The page scales this to pixels and does no other arithmetic, which is what
+    keeps the drawing provably the scorer's numbers rather than a second
+    opinion about them.
     """
-    # SWEET_SPOT_PEAK_TO_AVG is the same threshold the scorer uses to define
-    # the sweet-spot view, imported rather than restated so the sentence and
-    # the filter cannot disagree about what counts as spiky.
-    ratio = float(row["peak_to_avg"])
-    shaveable = max(float(v) for v in row["monthly_shaveable_kw"])
-    rate = row["rate_class"]
-    charge = float(row["demand_charge_per_kw"])
-    saving = float(row["annual_savings_usd"])
-
-    if ratio >= SWEET_SPOT_PEAK_TO_AVG:
-        shape = (
-            f"Peaks at {ratio:.1f}x its own 12-month average, so the demand "
-            f"charge is set by a spike rather than by how hard it runs"
-        )
-    else:
-        shape = (
-            f"Runs flat at {ratio:.1f}x its 12-month average, so there is "
-            f"little peak to remove"
-        )
-
-    return (
-        f"{shape}. On rate {rate} at {_money(charge)}/kW the battery takes "
-        f"{shaveable:,.0f} kW off the billed peak, worth {_money(saving)} a year."
-    )
+    values = [float(v) for v in row["monthly_billed_demand_kw"]]
+    top = max(values) if values else 0.0
+    if top <= 0.0:
+        return [0.0] * len(values)
+    return [round(v / top, 4) for v in values]
 
 
-def build_rows(
-    scored: pd.DataFrame,
-    parcels: pd.DataFrame,
-    limit: int = 200,
-) -> list[dict]:
-    """The ranked rows the page draws, richest first.
+def enrich(export_payload: dict, scored: pd.DataFrame) -> dict:
+    """The export, plus the occupant, the sparkline series and the method.
 
-    `limit` keeps the payload small enough to serve from the CDN in one
-    request. The spec's distribution plan caps a Pages asset at 25 MiB and
-    asks for top-N rows rather than the full parcel set.
+    Does not mutate its argument: the caller may still want to write the raw
+    export, and a function that quietly edits its input is a trap.
     """
-    detail = parcels.drop(columns="geometry", errors="ignore")
-    merged = scored.merge(detail, on="loc_id", how="left", suffixes=("", "_parcel"))
-    merged = occupants.attach(merged)
+    payload = copy.deepcopy(export_payload)
+    table = occupants.load()
 
-    kept = merged[merged["keep"]].nlargest(limit, "annual_savings_usd")
+    for rows in payload["lists"].values():
+        for row in rows:
+            resolved = table.get(row["loc_id"])
+            row["occupant"] = resolved.occupant if resolved else ""
+            row["occupant_source"] = resolved.occupant_source if resolved else ""
+            row["window_kw"] = window_series(row)
+            # The export carries twelve monthly figures; the row shows the
+            # best month, which is the number the reason sentence quotes.
+            row["shaveable_kw"] = max(
+                float(v) for v in row["monthly_shaveable_kw"]
+            )
 
-    rows: list[dict] = []
-    for rank, record in enumerate(kept.to_dict("records"), start=1):
-        monthly = [float(v) for v in record["monthly_shaveable_kw"]]
-        billed = [float(v) for v in record["monthly_billed_demand_kw"]]
-        worst = max(range(12), key=lambda i: monthly[i])
-        row = {
-            "loc_id": str(record["loc_id"]),
-            "rank": rank,
-            "occupant": str(record.get("occupant") or ""),
-            "occupant_source": str(record.get("occupant_source") or ""),
-            "owner": str(record.get("owner") or ""),
-            "site_addr": str(record.get("site_addr") or ""),
-            "city": str(record.get("city") or ""),
-            "use_desc": str(record.get("use_desc") or ""),
-            "archetype": str(record["archetype"]),
-            "source": str(record["source"]),
-            "sqft": float(record["sqft"]),
-            "avg_12mo_kw": float(record["avg_12mo_kw"]),
-            "peak_kw": float(record["peak_kw"]),
-            "peak_to_avg": float(record["peak_to_avg"]),
-            "rate_class": str(record["rate_class"]),
-            "demand_charge_per_kw": float(record["demand_charge_per_kw"]),
-            "annual_savings_usd": float(record["annual_savings_usd"]),
-            "shaved_fraction": float(record["shaved_fraction"]),
-            "shaveable_kw": monthly[worst],
-            "confidence": str(record.get("confidence") or "LOW"),
-            "flags": [str(f) for f in record["flags"]],
-            "sweet_spot": bool(record["sweet_spot"]),
-            # The 12 monthly billed peaks, normalised to the year's own max.
-            # The page draws this as the row sparkline: it is the shape, and
-            # the page does no arithmetic beyond scaling it to pixels.
-            "window_kw": [
-                round(v / max(billed) if max(billed) > 0 else 0.0, 4) for v in billed
-            ],
-        }
-        row["reason"] = reason_for({**record, "monthly_shaveable_kw": monthly})
-        rows.append(row)
-    return rows
-
-
-def build_site_payload(
-    scored: pd.DataFrame,
-    parcels: pd.DataFrame,
-    regression: dict | None = None,
-    limit: int = 200,
-) -> dict:
-    """Both files the page loads, as one object the build script splits."""
-    return {
-        "schema_version": SITE_SCHEMA_VERSION,
-        "ranked": {
-            "schema_version": SITE_SCHEMA_VERSION,
-            "municipality": "Worcester",
-            "rows": build_rows(scored, parcels, limit=limit),
-            "counts": {
-                "screened": int(len(scored)),
-                "kept": int(scored["keep"].sum()),
-                "sweet_spot": int(scored["sweet_spot"].sum()),
-                "shown": min(limit, int(scored["keep"].sum())),
-            },
-        },
-        "method": method.method_payload(scored, regression=regression),
-    }
+    payload["site_schema_version"] = SITE_SCHEMA_VERSION
+    payload["method"] = method.method_payload(scored)
+    return payload
 ```
 
-- [ ] **Step 4: Run the reason tests**
+- [ ] **Step 4: Run the tests**
 
 Run: `uv run pytest tests/test_site_data.py -v`
-Expected: PASS, both.
+Expected: PASS, all four.
 
 - [ ] **Step 5: Write the build script**
 
@@ -349,8 +324,10 @@ Create `scripts/build_site.py`:
 
     uv run python scripts/build_site.py
 
-Writes public/data/ranked.json and public/data/method.json. Nothing on the
-request path computes anything; this is the whole build.
+Calls the same `export.build_export` that `scripts/run_pipeline.py` calls, so
+there is one implementation of the ranked contract and no chance of the site
+and the raw export disagreeing. Writes public/data/ranked.json (the enriched
+export) and public/data/method.json.
 """
 
 from __future__ import annotations
@@ -358,58 +335,60 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
-from shave import ingest, pipeline, site_data
+from shave import export, ingest, pipeline, site_data
 
 WORCESTER = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
-OUT_DIR = Path("public/data")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir", default=WORCESTER)
     parser.add_argument("--town-id", type=int, default=348)
-    parser.add_argument("--limit", type=int, default=200)
-    parser.add_argument("--out", default=str(OUT_DIR))
+    parser.add_argument("--town-name", default="Worcester")
+    parser.add_argument("--top-n", type=int, default=export.TOP_N)
+    parser.add_argument("--out", default="public/data")
     args = parser.parse_args()
 
-    if not Path("src/shave/export.py").exists():
-        print(
-            "src/shave/export.py is missing. Run first-ranked-list Tasks 5 and 6\n"
-            "before building the site; this plan consumes their versioned export\n"
-            "and must not create a second one.",
-            file=sys.stderr,
-        )
-        return 2
-
+    started = time.perf_counter()
     parcels = ingest.load_municipality(args.dir, town_id=args.town_id)
     scored = pipeline.score_parcels(parcels)
 
-    regression = None
-    try:
-        from shave import regression as regression_module
+    parcels = parcels.copy()
+    # representative_point, not centroid: a centroid of an L-shaped or ring
+    # parcel can land outside it, which puts a marker in someone else's yard.
+    centroids = parcels.geometry.to_crs(4326).representative_point()
+    parcels["lon"] = centroids.x
+    parcels["lat"] = centroids.y
 
-        regression = regression_module.report(scored)
-    except Exception as exc:  # noqa: BLE001 - absence is a stated state, not a crash
-        print(f"regression not available ({exc}); the method page will say so",
-              file=sys.stderr)
+    assess_fy = parcels["assess_fy"].dropna()
+    town = {
+        "name": args.town_name,
+        "town_id": args.town_id,
+        "assess_fy": int(assess_fy.iloc[0]) if len(assess_fy) else None,
+    }
 
-    payload = site_data.build_site_payload(
-        scored, parcels, regression=regression, limit=args.limit
-    )
+    raw = export.build_export(scored, parcels, town=town, top_n=args.top_n)
+    enriched = site_data.enrich(raw, scored)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "ranked.json").write_text(json.dumps(payload["ranked"], indent=None))
-    (out / "method.json").write_text(json.dumps(payload["method"], indent=None))
+    ranked = {k: v for k, v in enriched.items() if k != "method"}
+    (out / "ranked.json").write_text(
+        json.dumps(ranked, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+    )
+    (out / "method.json").write_text(
+        json.dumps(enriched["method"], separators=(",", ":"), ensure_ascii=False),
+        encoding="utf-8",
+    )
 
-    ranked_kb = (out / "ranked.json").stat().st_size / 1024
-    method_kb = (out / "method.json").stat().st_size / 1024
-    print(f"ranked.json  {ranked_kb:7.1f} KB  "
-          f"{len(payload['ranked']['rows'])} rows of "
-          f"{payload['ranked']['counts']['kept']} kept")
-    print(f"method.json  {method_kb:7.1f} KB")
+    for name in ("ranked.json", "method.json"):
+        print(f"{name:14s} {(out / name).stat().st_size / 1024:8.1f} KB", file=sys.stderr)
+    print(f"lists: " + ", ".join(
+        f"{k} {len(v)}" for k, v in enriched["lists"].items()), file=sys.stderr)
+    print(f"built in {time.perf_counter() - started:.1f}s", file=sys.stderr)
     return 0
 
 
@@ -417,109 +396,106 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-`regression_module.report` is defined by first-ranked-list Task 6. If that task named it
-differently, use the name it defines; the `try/except` above is what keeps this a stated state
-rather than a crash either way.
-
 - [ ] **Step 6: Write the contract test**
 
 Append to `tests/test_site_data.py`:
 
 ```python
-WORCESTER_DIR = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
-needs_worcester = pytest.mark.skipif(
-    not __import__("pathlib").Path(
-        WORCESTER_DIR + "/M348TaxPar_CY26_FY26.shp"
-    ).exists(),
-    reason="Worcester L3 extract not present (data/raw is gitignored)",
-)
-
-
 @needs_worcester
 def test_every_field_the_page_reads_is_present_on_every_row():
-    """The consumer contract. A rename in the pipeline must break the build,
-    not the browser."""
-    from shave import ingest, pipeline
+    """The consumer contract. A rename in the pipeline or the export must
+    break the build, not the browser."""
+    from shave import export, ingest, pipeline
 
     parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    rows = site_data.build_rows(pipeline.score_parcels(parcels), parcels, limit=25)
+    scored = pipeline.score_parcels(parcels)
+    raw = export.build_export(scored, parcels,
+                              town={"name": "Worcester", "town_id": 348}, top_n=25)
+    enriched = site_data.enrich(raw, scored)
 
-    assert len(rows) == 25
-    for row in rows:
-        missing = set(site_data.ROW_FIELDS) - set(row)
-        assert not missing, f"row {row.get('loc_id')} missing {sorted(missing)}"
+    for name, rows in enriched["lists"].items():
+        assert rows, f"the {name} list is empty"
+        for row in rows:
+            missing = set(site_data.REQUIRED_ROW_FIELDS) - set(row)
+            assert not missing, f"{name} row {row['loc_id']} missing {sorted(missing)}"
 
 
 @needs_worcester
 def test_the_payload_is_json_serialisable_and_small_enough_to_serve():
-    """The spec caps a static asset at 25 MiB and asks for top-N rows with
-    simplified geometry rather than the full parcel set."""
-    from shave import ingest, pipeline
+    from shave import export, ingest, pipeline
 
     parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    payload = site_data.build_site_payload(
-        pipeline.score_parcels(parcels), parcels, limit=200
-    )
-    blob = json.dumps(payload)
-    assert len(blob) < 25 * 1024 * 1024
-    assert payload["ranked"]["schema_version"] == site_data.SITE_SCHEMA_VERSION
+    scored = pipeline.score_parcels(parcels)
+    enriched = site_data.enrich(
+        export.build_export(scored, parcels,
+                            town={"name": "Worcester", "town_id": 348}), scored)
+
+    blob = json.dumps(enriched, separators=(",", ":"))
+    assert len(blob.encode("utf-8")) < export.MAX_BYTES
 
 
 @needs_worcester
-def test_the_top_row_carries_a_named_occupant_and_its_reason():
+def test_the_top_comstock_row_carries_a_named_occupant_and_its_reason():
     """Success criterion 2, at the point the page reads it."""
-    from shave import ingest, pipeline
+    from shave import export, ingest, pipeline
 
     parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    rows = site_data.build_rows(pipeline.score_parcels(parcels), parcels, limit=5)
+    scored = pipeline.score_parcels(parcels)
+    enriched = site_data.enrich(
+        export.build_export(scored, parcels,
+                            town={"name": "Worcester", "town_id": 348}), scored)
 
-    top = rows[0]
+    top = enriched["lists"]["comstock"][0]
     assert top["rank"] == 1
-    assert top["occupant"], "the top row must name a real business"
-    assert top["occupant_source"].startswith("http")
     assert top["reason"].endswith(".")
+    assert top["occupant"], "the top ComStock row must name a real business"
 
 
 @needs_worcester
-def test_rows_are_ranked_by_dollars_descending():
-    from shave import ingest, pipeline
+def test_each_list_is_ranked_by_dollars_within_itself():
+    from shave import export, ingest, pipeline
 
     parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    rows = site_data.build_rows(pipeline.score_parcels(parcels), parcels, limit=40)
-    values = [r["annual_savings_usd"] for r in rows]
-    assert values == sorted(values, reverse=True)
-    assert [r["rank"] for r in rows] == list(range(1, len(rows) + 1))
+    scored = pipeline.score_parcels(parcels)
+    enriched = site_data.enrich(
+        export.build_export(scored, parcels,
+                            town={"name": "Worcester", "town_id": 348}), scored)
+
+    for rows in enriched["lists"].values():
+        usd = [r["annual_savings_usd"] for r in rows]
+        assert usd == sorted(usd, reverse=True)
+        assert [r["rank"] for r in rows] == list(range(1, len(rows) + 1))
 ```
 
 - [ ] **Step 7: Run the suite and the build**
 
 Run: `uv run pytest`
-Expected: PASS, 919 + 6 new.
+Expected: PASS, prior count plus 8 here.
 
 Then:
 ```bash
-uv run python scripts/build_site.py --limit 200
+uv run python scripts/build_site.py
 ls -la public/data/
 ```
 
-**Pass condition, declared in advance:** both files are written; `ranked.json` holds 200 rows;
-the printed sizes are reported in your task report. If `src/shave/export.py` is missing the
-script exits 2 with the prerequisite message — that is correct behaviour, not a failure to fix
-here.
+**Pass condition, declared in advance:** both files are written, both lists are non-empty, and
+the printed sizes are reported in your task report.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 git add src/shave/site_data.py scripts/build_site.py tests/test_site_data.py
-git commit -m "feat: the site's data contract
+git commit -m "feat: the site's data contract, adapted from the one export
 
-The page must never compute. Every figure it shows is handed to it, so the
-sentence on screen is provably the one the scorer's numbers support. A
-template that recomputed anything would be the scoring function rewritten in
-JavaScript, and the two would drift.
+export.build_export is the single implementation of the ranked payload. This
+adapts it rather than re-deriving it: it adds the hand-resolved occupant, a
+sparkline series normalised to each site's own annual peak, and the method
+payload. A second derivation would be a second place for the schema to drift.
 
-ROW_FIELDS is the consumer-side contract: a rename in the pipeline breaks the
-build rather than the browser.
+The two lists stay separate. The modelled magnitude runs through a published
+intensity and a derived load factor, ComStock's through a measured timeseries,
+and ranking them against each other in dollars would claim a comparability the
+data does not support.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01XBVg1CupSRWe1YGgZjes48"
@@ -597,11 +573,22 @@ Expected: node resolves to v22.18.0, `npx wrangler --version` prints a 4.x versi
 ```bash
 cat >> .gitignore <<'EOF'
 
-# site build output: the page source is tracked, its generated data is not
+# site: the page source is tracked, every generated artifact is not.
+# This block SUPERSEDES the `public/*` + `!public/ranked.json` rules that
+# first-ranked-list Task 5 step 10 adds. Applied in sequence those would hide
+# public/index.html and the deploy would serve nothing. If Task 5's rules are
+# already in .gitignore, delete them and keep only this block.
 node_modules/
-public/data/
 .wrangler/
+public/data/
+public/ranked.json
 EOF
+```
+
+Then confirm the page source is still visible to git:
+
+```bash
+git check-ignore -v public/index.html && echo "BROKEN: page source is ignored" || echo "page source tracked, good"
 ```
 
 - [ ] **Step 5: Write `public/app.css`**
@@ -651,6 +638,9 @@ a{color:inherit}
 .skip{position:absolute; left:-9999px; top:0; background:var(--ink); color:var(--ground);
   padding:8px 12px; z-index:9}
 .skip:focus{left:8px; top:8px}
+/* Why the two lists are not one. Stated on the page, not just in the method. */
+.whysplit{margin:0; padding:9px 12px; border-top:1px solid var(--rule);
+  font-size:12px; color:var(--ink-2); max-width:70ch}
 ```
 
 Then append, unchanged from the mockup, the rule blocks for `.mast`, `.brandline`, `.brand`,
@@ -713,8 +703,7 @@ Then append, unchanged from the mockup, the rule blocks for `.mast`, `.brandline
   <section id="v-main" role="tabpanel" aria-labelledby="tab-main">
     <div class="toolbar">
       <div class="seg" role="group" aria-label="Profile source">
-        <button id="src-all" aria-pressed="true">All sources</button>
-        <button id="src-cs" aria-pressed="false">ComStock&#8209;backed</button>
+        <button id="src-cs" aria-pressed="true">ComStock&#8209;backed</button>
         <button id="src-md" aria-pressed="false">Modeled industrial</button>
       </div>
       <div class="seg" role="group" aria-label="View">
@@ -728,7 +717,7 @@ Then append, unchanged from the mockup, the rule blocks for `.mast`, `.brandline
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">Ranked by estimated annual demand-charge saving</span>
-          <span class="eyebrow" id="listsrc">All sources</span>
+          <span class="eyebrow" id="listsrc">ComStock&#8209;backed</span>
         </div>
         <div class="tablewrap">
           <table>
@@ -742,6 +731,7 @@ Then append, unchanged from the mockup, the rule blocks for `.mast`, `.brandline
             <tbody id="rows"></tbody>
           </table>
         </div>
+        <p class="whysplit" id="whysplit"></p>
         <div class="drawer" id="drawer"></div>
       </div>
     </div>
@@ -1052,7 +1042,16 @@ export function drawerHTML(row, flagMeanings) {
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
-const state = { rows: [], shown: [], method: null, selected: null };
+// Two lists, never merged. `source` selects which one is on screen.
+const state = { lists: { comstock: [], modeled: [] }, shown: [], method: null,
+                selected: null, source: "comstock", view: "all" };
+
+const WHY_SPLIT =
+  "ComStock-backed and modelled-industrial rows are ranked separately and never " +
+  "against each other. A ComStock magnitude comes from a measured timeseries; a " +
+  "modelled one comes from a published intensity and a load factor derived from a " +
+  "declared shape. Comparing their dollars would claim an accuracy the second one " +
+  "does not have.";
 
 function select(id) {
   state.selected = id;
@@ -1080,10 +1079,9 @@ function draw() {
   }
 }
 
-function applyFilters(source, view) {
-  state.shown = state.rows.filter(
-    (r) => (source === "all" || r.source === source) && (view !== "sweet" || r.sweet_spot),
-  );
+function applyFilters() {
+  const rows = state.lists[state.source] || [];
+  state.shown = state.view === "sweet" ? rows.filter((r) => r.sweet_spot) : rows;
   draw();
 }
 
@@ -1098,20 +1096,23 @@ async function boot() {
       `problem with the data itself.</p></td></tr>`;
     return;
   }
-  if (String(ranked.schema_version || "").split(".")[0] !== SUPPORTED_MAJOR) {
+  if (String(ranked.site_schema_version || "").split(".")[0] !== SUPPORTED_MAJOR) {
     $("#rows").innerHTML =
       `<tr><td colspan="7"><p class="reason">This page was built for schema ` +
-      `${SUPPORTED_MAJOR}.x and the data is ${esc(ranked.schema_version)}. ` +
+      `${SUPPORTED_MAJOR}.x and the data is ${esc(ranked.site_schema_version)}. ` +
       `Refusing to render rather than draw wrong numbers.</p></td></tr>`;
     return;
   }
 
-  state.rows = ranked.rows;
+  state.lists = ranked.lists;
   const c = ranked.counts;
   $("#counts").textContent =
-    `${c.screened.toLocaleString()} parcels screened · ${c.kept.toLocaleString()} in band · ` +
-    `${c.sweet_spot.toLocaleString()} in the sweet spot · showing top ${c.shown}`;
-  applyFilters("all", "all");
+    `${c.parcels_in.toLocaleString()} parcels screened · ` +
+    `${c.kept.toLocaleString()} in band · ` +
+    `${c.sweet_spot.toLocaleString()} in the sweet spot · ` +
+    `showing top ${c.exported.comstock} measured and ${c.exported.modeled} modelled`;
+  $("#whysplit").textContent = WHY_SPLIT;
+  applyFilters();
 
   try {
     state.method = await (await fetch("/data/method.json")).json();
@@ -1134,27 +1135,25 @@ async function boot() {
     }
   });
 
-  const sources = { "src-all": "all", "src-cs": "comstock", "src-md": "modeled" };
+  const sources = { "src-cs": "comstock", "src-md": "modeled" };
   const views = { "view-all": "all", "view-sweet": "sweet" };
-  let source = "all";
-  let view = "all";
   Object.keys(sources).forEach((id) =>
     $("#" + id).addEventListener("click", () => {
-      source = sources[id];
+      state.source = sources[id];
       Object.keys(sources).forEach((k) =>
         $("#" + k).setAttribute("aria-pressed", String(k === id)),
       );
       $("#listsrc").textContent = $("#" + id).textContent;
-      applyFilters(source, view);
+      applyFilters();
     }),
   );
   Object.keys(views).forEach((id) =>
     $("#" + id).addEventListener("click", () => {
-      view = views[id];
+      state.view = views[id];
       Object.keys(views).forEach((k) =>
         $("#" + k).setAttribute("aria-pressed", String(k === id)),
       );
-      applyFilters(source, view);
+      applyFilters();
     }),
   );
 
