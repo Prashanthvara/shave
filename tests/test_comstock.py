@@ -306,3 +306,112 @@ def test_committed_fixture_loads_and_has_a_real_shape():
     assert (prof.monthly_peak_kw > 0).all()
     # A real office is not flat across the billed day.
     assert prof.windows[6].std() > 0
+
+
+from pathlib import Path
+
+from shave.archetype import Archetype
+
+
+def test_every_comstock_crosswalk_archetype_has_a_comstock_type():
+    """The crosswalk promises these are measured. Prove each one resolves."""
+    from shave.crosswalk import load
+    named = {r.archetype for r in load().values() if r.source == "comstock"}
+    named.discard("office")  # a family, resolved to a band before lookup
+    missing = named - set(comstock.ARCHETYPE_TO_COMSTOCK)
+    assert missing == set(), f"no ComStock type mapped for {sorted(missing)}"
+
+
+def test_archetype_satisfies_the_protocol(tmp_path):
+    prof = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+    a = comstock.ComStockArchetype(profile=prof, sqft=prof.sqft * 2)
+    assert isinstance(a, Archetype)
+    assert a.source == "comstock"
+    assert a.monthly_peaks().shape == (12,)
+    assert a.peak_day_window(7).shape == (INTERVALS_PER_BILLED_DAY,)
+
+
+def test_scaling_is_linear_in_floor_area():
+    prof = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+    one = comstock.ComStockArchetype(profile=prof, sqft=prof.sqft)
+    two = comstock.ComStockArchetype(profile=prof, sqft=prof.sqft * 2)
+    np.testing.assert_allclose(two.monthly_peaks(), one.monthly_peaks() * 2)
+
+
+def test_month_out_of_range_raises():
+    prof = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+    a = comstock.ComStockArchetype(profile=prof, sqft=1000.0)
+    for bad in (0, 13):
+        with pytest.raises(ValueError, match="month must be 1-12"):
+            a.peak_day_window(bad)
+
+
+def test_cache_hit_does_not_touch_the_network(tmp_path, monkeypatch):
+    prof = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+    cache = tmp_path / "small_office__G2500270.parquet"
+    prof.to_frame().to_parquet(cache)
+
+    def explode(*a, **k):
+        raise AssertionError("cache miss: the network was used")
+    monkeypatch.setattr(comstock, "connect", explode)
+
+    a = comstock.build_archetype("small_office", sqft=9000.0,
+                                 county_gisjoin="G2500270", cache_dir=tmp_path)
+    assert a.monthly_peaks().shape == (12,)
+
+
+class _StubConn:
+    """A connect() stand-in whose only job is to survive conn.close()."""
+
+    def close(self) -> None:
+        pass
+
+
+def test_cache_hit_preserves_widened_and_cohort_size(tmp_path, monkeypatch):
+    """The thin-cohort flag must survive a cache round trip.
+
+    Hospital's cohort in Worcester County is exactly 2 buildings, so
+    select_representative marks that Representative widened=True,
+    cohort_size=2. A cache MISS must carry that onto the returned
+    ComStockArchetype, and a cache HIT that reads the same cached parquet
+    back -- with every network-touching function replaced by an
+    AssertionError -- must report the identical flag, not silently drop back
+    to the dataclass default. That silent drop is exactly the bug this test
+    exists to catch.
+    """
+    prof = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+
+    rep = comstock.Representative(
+        bldg_id=prof.bldg_id,
+        building_type="Hospital",
+        sqft=prof.sqft,
+        cohort_size=2,
+        widened=True,
+    )
+
+    monkeypatch.setattr(comstock, "connect", lambda: _StubConn())
+    monkeypatch.setattr(comstock, "load_county_index", lambda *a, **k: None)
+    monkeypatch.setattr(comstock, "select_representative", lambda *a, **k: rep)
+    monkeypatch.setattr(comstock, "reduce_timeseries", lambda *a, **k: prof)
+
+    miss = comstock.build_archetype(
+        "hospital", sqft=50_000.0, county_gisjoin="G2500270", cache_dir=tmp_path)
+    assert miss.widened is True
+    assert miss.cohort_size == 2
+
+    def explode(*a, **k):
+        raise AssertionError("cache hit: the network was used")
+    monkeypatch.setattr(comstock, "connect", explode)
+    monkeypatch.setattr(comstock, "load_county_index", explode)
+    monkeypatch.setattr(comstock, "select_representative", explode)
+    monkeypatch.setattr(comstock, "reduce_timeseries", explode)
+
+    hit = comstock.build_archetype(
+        "hospital", sqft=50_000.0, county_gisjoin="G2500270", cache_dir=tmp_path)
+    assert hit.widened == miss.widened is True
+    assert hit.cohort_size == miss.cohort_size == 2

@@ -14,7 +14,8 @@ rows from the second.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 
 import duckdb
 import numpy as np
@@ -170,6 +171,13 @@ class ReducedProfile:
     monthly_peak_kw: np.ndarray   # (12,)
     windows: np.ndarray           # (12, INTERVALS_PER_BILLED_DAY)
     sqft: float | None = None
+    # Carried from the Representative that produced this profile, so a
+    # thin-cohort shape (e.g. Hospital, 2 buildings in Worcester County)
+    # stays visible to anything downstream, including after a cache round
+    # trip. Absent on profiles built directly by reduce_from_frame/
+    # reduce_timeseries, which know nothing about cohort selection.
+    widened: bool = False
+    cohort_size: int | None = None
 
     def to_frame(self) -> pd.DataFrame:
         return pd.DataFrame({
@@ -177,6 +185,10 @@ class ReducedProfile:
             "month": np.arange(1, 13),
             "monthly_peak_kw": self.monthly_peak_kw,
             "sqft": np.repeat(np.nan if self.sqft is None else self.sqft, 12),
+            "widened": np.repeat(self.widened, 12),
+            "cohort_size": np.repeat(
+                np.nan if self.cohort_size is None else self.cohort_size, 12
+            ),
             **{f"i{i:02d}": self.windows[:, i] for i in range(INTERVALS_PER_BILLED_DAY)},
         })
 
@@ -185,11 +197,24 @@ class ReducedProfile:
         df = df.sort_values("month")
         cols = [f"i{i:02d}" for i in range(INTERVALS_PER_BILLED_DAY)]
         sqft = float(df["sqft"].iloc[0])
+        # Older cached/fixture frames predate these two columns; default them
+        # rather than raising, so a pre-existing cache is not a hard break.
+        if "widened" in df.columns:
+            widened = bool(df["widened"].iloc[0])
+        else:
+            widened = False
+        if "cohort_size" in df.columns:
+            raw_cohort = df["cohort_size"].iloc[0]
+            cohort_size = None if pd.isna(raw_cohort) else int(raw_cohort)
+        else:
+            cohort_size = None
         return cls(
             bldg_id=int(df["bldg_id"].iloc[0]),
             monthly_peak_kw=df["monthly_peak_kw"].to_numpy(dtype=float),
             windows=df[cols].to_numpy(dtype=float),
             sqft=None if np.isnan(sqft) else sqft,
+            widened=widened,
+            cohort_size=cohort_size,
         )
 
 
@@ -251,3 +276,108 @@ def reduce_timeseries(
     if raw.empty:
         raise ComStockError(f"building {bldg_id}: timeseries is empty")
     return reduce_from_frame(bldg_id, raw, sqft)
+
+
+CACHE_DIR = Path("data/interim/comstock")
+
+# Crosswalk archetype name to ComStock's in.comstock_building_type value.
+# The crosswalk's `office` family is resolved to a size band by
+# crosswalk.resolve_office_band before it reaches here.
+ARCHETYPE_TO_COMSTOCK: dict[str, str] = {
+    "small_office": "SmallOffice",
+    "medium_office": "MediumOffice",
+    "large_office": "LargeOffice",
+    "retail_standalone": "RetailStandalone",
+    "strip_mall": "RetailStripmall",
+    "warehouse": "Warehouse",
+    "full_service_restaurant": "FullServiceRestaurant",
+    "quick_service_restaurant": "QuickServiceRestaurant",
+    "primary_school": "PrimarySchool",
+    "secondary_school": "SecondarySchool",
+    "hospital": "Hospital",
+    "outpatient": "Outpatient",
+    "large_hotel": "LargeHotel",
+    "small_hotel": "SmallHotel",
+}
+
+
+@dataclass
+class ComStockArchetype:
+    """A measured profile, scaled to one parcel's floor area.
+
+    The representative building has its own floor area. A parcel's profile is
+    the representative's, scaled linearly by parcel_sqft / representative_sqft.
+    Shape comes from the measured building; magnitude comes from the parcel.
+
+    `widened` and `cohort_size` carry the thin-cohort flag from the
+    Representative that produced this archetype's profile (see
+    select_representative). Hospital has exactly 2 buildings in Worcester
+    County, so its shape is the median of 2 -- anything consuming this
+    archetype can see that instead of it being silently discarded.
+    """
+
+    profile: ReducedProfile
+    sqft: float
+    source: str = "comstock"
+    widened: bool = False
+    cohort_size: int | None = None
+
+    @property
+    def _scale(self) -> float:
+        base = self.profile.sqft
+        if not base:
+            raise ComStockError(
+                f"building {self.profile.bldg_id} has no floor area; cannot scale"
+            )
+        return self.sqft / base
+
+    def monthly_peaks(self) -> np.ndarray:
+        return self.profile.monthly_peak_kw * self._scale
+
+    def peak_day_window(self, month: int) -> np.ndarray:
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be 1-12, got {month}")
+        return self.profile.windows[month - 1] * self._scale
+
+
+def build_archetype(
+    archetype_name: str,
+    sqft: float,
+    county_gisjoin: str = WORCESTER_COUNTY_GISJOIN,
+    cache_dir: Path | str = CACHE_DIR,
+) -> ComStockArchetype:
+    """The measured archetype for a crosswalk name, cached to local parquet.
+
+    One network round trip per (archetype, county), not per parcel. The
+    Representative's widened/cohort_size travel with the cached profile, so a
+    cache hit reports the same thin-cohort flag a cache miss would have
+    computed rather than silently reverting to the dataclass default.
+    """
+    if archetype_name not in ARCHETYPE_TO_COMSTOCK:
+        raise ComStockError(
+            f"{archetype_name!r} has no ComStock type. ComStock models 14 "
+            "building types; anything else must be a modeled archetype."
+        )
+    cache_dir = Path(cache_dir)
+    cached = cache_dir / f"{archetype_name}__{county_gisjoin}.parquet"
+
+    if cached.exists():
+        profile = ReducedProfile.from_frame(pd.read_parquet(cached))
+    else:
+        conn = connect()
+        try:
+            index = load_county_index(county_gisjoin, conn=conn)
+            rep = select_representative(index, ARCHETYPE_TO_COMSTOCK[archetype_name])
+            profile = reduce_timeseries(rep.bldg_id, conn=conn, sqft=rep.sqft)
+        finally:
+            conn.close()
+        profile = replace(profile, widened=rep.widened, cohort_size=rep.cohort_size)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        profile.to_frame().to_parquet(cached)
+
+    return ComStockArchetype(
+        profile=profile,
+        sqft=sqft,
+        widened=profile.widened,
+        cohort_size=profile.cohort_size,
+    )
