@@ -199,6 +199,12 @@ class ReducedProfile:
         sqft = float(df["sqft"].iloc[0])
         # Older cached/fixture frames predate these two columns; default them
         # rather than raising, so a pre-existing cache is not a hard break.
+        # CAUTION for the next schema addition: silently defaulting a flag
+        # like `widened` to False on a column-less file makes a thin cohort
+        # look well-sampled -- exactly what the flag exists to prevent. Any
+        # future column added here needs the same explicit test coverage as
+        # test_missing_widened_and_cohort_size_columns_default_safely below,
+        # not just a "it didn't crash" check.
         if "widened" in df.columns:
             widened = bool(df["widened"].iloc[0])
         else:
@@ -324,6 +330,11 @@ class ComStockArchetype:
 
     @property
     def _scale(self) -> float:
+        if self.sqft <= 0:
+            raise ComStockError(
+                f"parcel sqft must be positive, got {self.sqft}; cannot scale "
+                f"building {self.profile.bldg_id}"
+            )
         base = self.profile.sqft
         if not base:
             raise ComStockError(

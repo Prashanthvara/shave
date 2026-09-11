@@ -415,3 +415,52 @@ def test_cache_hit_preserves_widened_and_cohort_size(tmp_path, monkeypatch):
         "hospital", sqft=50_000.0, county_gisjoin="G2500270", cache_dir=tmp_path)
     assert hit.widened == miss.widened is True
     assert hit.cohort_size == miss.cohort_size == 2
+
+
+def test_missing_widened_and_cohort_size_columns_default_safely():
+    """A column-less frame must default to False/None, not merely not crash.
+
+    The committed fixture predates the widened/cohort_size columns, so
+    from_frame has to tolerate their absence. But tolerating absence and
+    defaulting to the RIGHT values are different claims -- silently
+    defaulting widened=False on a column-less file would report a thin
+    cohort as well-sampled, exactly what the flag exists to catch. This
+    builds a frame with those two columns stripped out and asserts the
+    specific values from_frame falls back to, rather than only asserting
+    the load doesn't raise.
+    """
+    prof = comstock.reduce_from_frame(
+        1, _synthetic_year([100.0] * 12), sqft=5000.0)
+    df = prof.to_frame().drop(columns=["widened", "cohort_size"])
+    back = comstock.ReducedProfile.from_frame(df)
+    assert back.widened is False
+    assert back.cohort_size is None
+
+
+def test_committed_fixture_defaults_widened_and_cohort_size():
+    """The real, committed old-format fixture also gets the safe defaults."""
+    df = pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet")
+    assert "widened" not in df.columns and "cohort_size" not in df.columns
+    prof = comstock.ReducedProfile.from_frame(df)
+    assert prof.widened is False
+    assert prof.cohort_size is None
+
+
+def test_scale_rejects_zero_or_negative_parcel_sqft():
+    """A malformed parcel area must raise, not quietly produce a $0 building.
+
+    ComStockArchetype._scale already guarded the representative's floor
+    area (profile.sqft); it did not guard the parcel's own sqft. A parcel
+    with sqft=0 silently yielded an all-zero profile, and a negative sqft
+    yielded negative "peaks" -- both look like a parcel that legitimately
+    has nothing to shave rather than a data error, so nothing downstream
+    would ever flag it.
+    """
+    prof = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+    for bad_sqft in (0.0, -100.0):
+        a = comstock.ComStockArchetype(profile=prof, sqft=bad_sqft)
+        with pytest.raises(comstock.ComStockError, match="parcel sqft must be positive"):
+            a.monthly_peaks()
+        with pytest.raises(comstock.ComStockError, match="parcel sqft must be positive"):
+            a.peak_day_window(1)
