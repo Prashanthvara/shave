@@ -122,3 +122,54 @@ def test_an_oversized_payload_is_refused(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="ceiling"):
         export.write_export({"schema_version": "1.0.0", "pad": "x" * 500},
                             tmp_path / "ranked.json")
+
+
+def test_the_export_carries_every_sweet_spot_row_the_counts_line_promises():
+    """The page prints a sweet-spot count and then filters the exported rows.
+    If the export was cut by dollars first, the view shows a fraction of the
+    number beside it -- and sweet-spot sites are small by construction, so
+    they are exactly the rows a dollar cut removes. Measured on Worcester:
+    172 promised, 68 shown, median sweet-spot dollar rank 316 of 526.
+    """
+    rows = [_row(f"L{i}", usd=100_000.0 - i) for i in range(60)]
+    # Twenty sweet-spot sites, all ranked below the dollar cut.
+    for i in range(60, 80):
+        rows.append(_row(f"S{i}", usd=10.0 - i / 1000.0, sweet_spot=True))
+    scored = pd.DataFrame(rows)
+    parcels = _parcels([r["loc_id"] for r in rows])
+
+    payload = export.build_export(scored, parcels,
+                                  town={"name": "Worcester", "town_id": 348},
+                                  top_n=50)
+
+    exported = payload["lists"]["comstock"]
+    sweet = [r for r in exported if r["sweet_spot"]]
+    assert len(sweet) == 20, "every sweet-spot row must survive the dollar cut"
+    assert payload["counts"]["sweet_spot"] == 20
+
+
+def test_the_dollar_ranking_is_unchanged_by_the_sweet_spot_union():
+    """Adding sweet-spot rows must not reorder the list or renumber its head."""
+    rows = [_row(f"L{i}", usd=100_000.0 - i) for i in range(60)]
+    rows.append(_row("S1", usd=5.0, sweet_spot=True))
+    scored = pd.DataFrame(rows)
+
+    payload = export.build_export(scored, _parcels([r["loc_id"] for r in rows]),
+                                  town={"name": "Worcester", "town_id": 348},
+                                  top_n=50)
+    exported = payload["lists"]["comstock"]
+
+    usd = [r["annual_savings_usd"] for r in exported]
+    assert usd == sorted(usd, reverse=True), "still ranked by dollars"
+    assert [r["rank"] for r in exported] == list(range(1, len(exported) + 1))
+    assert exported[0]["loc_id"] == "L0", "the head of the list is untouched"
+    assert exported[-1]["loc_id"] == "S1", "the sweet-spot row joins at its own rank"
+
+
+def test_a_row_that_is_both_top_by_dollars_and_sweet_spot_appears_once():
+    rows = [_row("A", usd=90_000.0, sweet_spot=True), _row("B", usd=80_000.0)]
+    payload = export.build_export(pd.DataFrame(rows), _parcels(["A", "B"]),
+                                  town={"name": "Worcester", "town_id": 348},
+                                  top_n=50)
+    ids = [r["loc_id"] for r in payload["lists"]["comstock"]]
+    assert ids == ["A", "B"], f"duplicate or reordered: {ids}"

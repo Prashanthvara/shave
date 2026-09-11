@@ -22,12 +22,19 @@ from shave.assumptions import published_rows
 
 #: Bump the MINOR for an added field, the MAJOR for a removed or retyped one.
 #: `docs/ranked-json-schema.md` is the written contract; change both together.
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 #: Rows per list. Cloudflare caps a Pages asset at 25 MiB and the page has to
 #: render in under three seconds on a cold load; 250 rows per list keeps the
 #: payload in the hundreds of kilobytes with room for geometry later.
 TOP_N = 250
+
+#: Sweet-spot rows kept per list, on top of TOP_N. These are G-2 sites with a
+#: spiky shape -- small by construction, so a cut by dollars removes exactly
+#: them. Measured on Worcester: of 172 sweet-spot rows, dollar ranks run 32 to
+#: 526 with a median of 316, so a TOP_N of 250 lost 104 of them. Exporting the
+#: union lets each view be complete within itself without changing any ranking.
+SWEET_SPOT_N = 250
 
 #: Hard ceiling, well under Cloudflare's 25 MiB, checked at write time.
 MAX_BYTES = 5 * 1024 * 1024
@@ -98,8 +105,18 @@ def build_export(
 
     lists: dict[str, list[dict]] = {}
     for source in ("comstock", "modeled"):
-        subset = merged[(merged["source"] == source) & merged["keep"].astype(bool)]
-        subset = subset.nlargest(top_n, "annual_savings_usd")
+        kept = merged[(merged["source"] == source) & merged["keep"].astype(bool)]
+        by_dollars = kept.nlargest(top_n, "annual_savings_usd")
+        sweet = kept[kept["sweet_spot"].astype(bool)].nlargest(
+            SWEET_SPOT_N, "annual_savings_usd"
+        )
+        # Union, then re-sort. A row in both appears once; the ordering is
+        # still dollars descending, so ranks mean what they have always meant.
+        subset = (
+            pd.concat([by_dollars, sweet])
+            .drop_duplicates(subset="loc_id", keep="first")
+            .sort_values("annual_savings_usd", ascending=False)
+        )
         rows = []
         for rank, record in enumerate(subset.to_dict("records"), start=1):
             record = {k: _jsonable(v) for k, v in record.items()}

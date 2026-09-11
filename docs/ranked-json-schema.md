@@ -3,7 +3,7 @@
 This document and `export.SCHEMA_VERSION` change together. It is the only interface between
 the Python pipeline and anything that renders it.
 
-**Current version: `1.1.0`**
+**Current version: `1.2.0`**
 
 ## Versioning rule
 
@@ -14,6 +14,11 @@ the Python pipeline and anything that renders it.
 
 A stale deploy is the failure this exists to prevent: the page checks the major version before
 it draws anything.
+
+**1.2.0** — row *selection* widened. Each list now carries the top `TOP_N` rows
+by dollars plus up to `SWEET_SPOT_N` sweet-spot rows, de-duplicated and still
+ordered by dollars. No field was added, removed or retyped, so a 1.1.0 consumer
+keeps working; the list is simply longer and complete for the sweet-spot view.
 
 ## Why there are two lists and not one
 
