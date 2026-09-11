@@ -74,6 +74,11 @@ class CrosswalkRow:
     icp_sector: str
     confidence: Confidence
     note: str
+    #: True when this use code describes a building with more than one service
+    #: account. Demand charges accrue to an account, not a building, so a
+    #: parcel-level estimate for such a building is an aggregate that nobody is
+    #: billed for -- and it is always an overstatement, never an understatement.
+    multi_meter: bool = False
 
     @property
     def excluded(self) -> bool:
@@ -83,6 +88,28 @@ class CrosswalkRow:
     def is_collapse_point(self) -> bool:
         """True where the code cannot distinguish load shapes within itself."""
         return self.note.startswith("COLLAPSE POINT")
+
+
+#: Accepted spellings for a boolean crosswalk column, and which mean True.
+#: One mapping rather than two sets, so a value can never be accepted by the
+#: validator and then read as False by the parser.
+_FLAG_VALUES: dict[str, bool] = {
+    "": False, "0": False, "false": False,
+    "1": True, "true": True,
+}
+
+
+def _parse_flag(raw: object, column: str, where: str) -> bool:
+    """Read a 0/1 crosswalk column, rejecting anything unrecognised.
+
+    A typo must not silently read as False: these columns only ever *remove*
+    confidence, so a misparse fails open and grades a row higher than the
+    domain judgment intended.
+    """
+    text = str(raw if raw is not None else "").strip()
+    if text.lower() not in _FLAG_VALUES:
+        raise CrosswalkError(f"{where} {column} must be 0 or 1, got {text!r}")
+    return _FLAG_VALUES[text.lower()]
 
 
 @lru_cache(maxsize=1)
@@ -109,6 +136,9 @@ def load(path: Path | None = None) -> dict[str, CrosswalkRow]:
                 icp_sector=(raw.get("icp_sector") or "").strip(),
                 confidence=((raw.get("confidence") or "LOW").strip().upper()),  # type: ignore[arg-type]
                 note=(raw.get("note") or "").strip(),
+                multi_meter=_parse_flag(
+                    raw.get("multi_meter"), "multi_meter", f"{src.name}:{lineno} ({code})"
+                ),
             )
             _validate_row(row, src, lineno)
             rows[code] = row

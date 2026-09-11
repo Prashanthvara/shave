@@ -1,96 +1,96 @@
-use_code,use_desc,archetype,source,icp_sector,confidence,note
-3000,Hotels,large_hotel,comstock,,MED,
-3010,Motels,small_hotel,comstock,,MED,
-3020,"Inns, Resorts, Tourist Homes",small_hotel,comstock,,LOW,Single parcel.
-3040,Nursing Homes,outpatient,comstock,,LOW,Nearest ComStock type. Residential occupancy pattern is not modelled.
-3050,Private Hospitals,hospital,comstock,7,HIGH,
-3060,Care and Treatment Facilities,outpatient,comstock,,LOW,
-3140,Trucking Terminals,warehouse,comstock,11,MED,Dock doors dominate; ambient warehouse shape.
-3150,"Piers, Wharves, Docks",warehouse,comstock,,LOW,
-3160,"Other Storage, Warehouse and Distribution",warehouse,comstock,11,HIGH,Largest clean ICP match in Worcester.
-3210,"Building materials, hardware, farm equipment",retail_standalone,comstock,,MED,
-3220,"Discount, Junior Department, Department Stores",retail_standalone,comstock,10,MED,
-3221,Retail Condo,strip_mall,comstock,,LOW,Condo: parcel is a unit not a building. Metering almost certainly split.
-3222,Commercial Building (unspecified),exclude,,,LOW,Single parcel with no usable description.
-3230,Shopping Centers / Malls,strip_mall,comstock,10,HIGH,
-3240,Supermarkets over 10000 sq ft,retail_standalone,comstock,10,MED,UNDERSTATES: ComStock generic retail carries no grocery refrigeration load. Real grocery peaks are higher and flatter.
-3250,Small Retail and Services under 10000 sq ft,retail_standalone,comstock,10,HIGH,
-3260,Eating and Drinking Establishments,full_service_restaurant,comstock,,MED,Code does not separate full from quick service; full service is the conservative pick.
-3280,Retail Condo Model 06,strip_mall,comstock,,LOW,Condo. See 3221.
-3300,Automotive Vehicle Sales and Service,auto_dealership,modeled,8,LOW,ComStock has no dealership type. Modelled: showroom lighting plus service bays.
-3310,Automotive Supplies Sales and Service,retail_standalone,comstock,,MED,
-3320,Auto Repair Facilities,auto_service,modeled,8,LOW,ComStock has no type. Modelled: compressors and lifts on an intermittent duty cycle.
-3330,Fuel Service Areas (fuel only),exclude,,,MED,Canopy lighting and pumps only. No shaveable peak.
-3340,Gasoline Service Stations with repair,auto_service,modeled,8,LOW,
-3350,Car Wash Facilities,auto_service,modeled,,LOW,Heavy motor load on a short cycle. Genuinely spiky but unvalidated.
-3360,Parking Garages,exclude,,,HIGH,Lighting and ventilation only. Flat load with no peak worth shaving.
-3380,Other Motor Vehicle Sales and Services,auto_service,modeled,8,LOW,
-3400,General Office Buildings,office,comstock,,HIGH,Size band (small/medium/large) resolved from BLD_AREA at scoring time.
-3410,Bank Buildings,small_office,comstock,,MED,
-3420,Medical Office Buildings,outpatient,comstock,,HIGH,
-3421,Professional Condo,small_office,comstock,,LOW,Condo. Metering almost certainly split.
-3430,Office Condo,small_office,comstock,,LOW,Condo. Metering almost certainly split.
-3450,Office Lab,laboratory,modeled,6,LOW,ComStock explicitly excludes laboratories. Modelled: high constant base load from fume hoods and process cooling.
-3510,Educational Properties,secondary_school,comstock,,MED,
-3520,"Day Care Centers, Adult",outpatient,comstock,,LOW,
-3530,Fraternal Organizations,exclude,,,MED,Intermittent occupancy. No industrial process load.
-3550,Funeral Homes,exclude,,,MED,
-3560,Miscellaneous Public Services,small_office,comstock,,LOW,
-3640,Legitimate Theaters,exclude,,,LOW,ComStock explicitly excludes theaters. Single parcel; not worth a modelled archetype.
-3710,Ice Skating Rinks / Facilities,ice_rink,modeled,9,LOW,ComStock explicitly excludes ice rinks. Modelled: continuous refrigeration plus resurfacing cycles. A named ICP sector with a real Worcester building behind it.
-3740,Health Spas,retail_standalone,comstock,,LOW,
-3760,Gymnasiums and Athletic Clubs,retail_standalone,comstock,,LOW,
-3770,"Archery, Billiards, other indoor",exclude,,,LOW,
-3800,Golf Courses,exclude,,,MED,Clubhouse only. Not a meaningful C&I load.
-4000,Buildings for manufacturing operations,industrial_manufacturing,modeled,"1,3,4,5",LOW,"COLLAPSE POINT. Every manufacturer in Worcester carries this one code: machine shops, metal fabricators, food and beverage producers, industrial materials makers and commercial laundries are indistinguishable here. Within this code the ranking is driven by floor area and rate class, not by load shape. Stated plainly on the method page."
-4010,Warehouses for storage of manufactured products,industrial_warehouse_process,modeled,2,LOW,"COLLAPSE POINT. Refrigerated cold storage sits inside this code alongside ambient warehousing with no way to separate them from assessor data. Modelled with a partial refrigeration duty cycle, which overstates ambient sites and understates true cold storage."
-4020,Office Building part of manufacturing operation,medium_office,comstock,,MED,Office occupancy despite the 4000-series code.
-4021,Industrial Condo,industrial_manufacturing,modeled,,LOW,Condo. Metering almost certainly split across units.
-4040,Research and Development facilities,laboratory,modeled,6,LOW,ComStock explicitly excludes laboratories.
-4100,Sand and Gravel Mining / Quarry,exclude,,,MED,Process load is mobile plant, not building load.
-4240,Electricity Regulating Substations,exclude,,,HIGH,Utility asset. Not a customer.
-4270,Natural or Manufactured Gas Storage,exclude,,,HIGH,Utility asset.
-4280,Gas Pressure Control Stations,exclude,,,HIGH,Utility asset.
-4300,Telephone Exchange Stations,data_hall,modeled,,LOW,ComStock explicitly excludes data centers. Very high flat load; almost certainly a poor battery candidate but worth scoring to show why.
-4320,Cable TV Transmitting Facilities,data_hall,modeled,,LOW,
-4330,"Radio, Television Transmission Facilities",exclude,,,MED,Under 600 sq ft each. Below any meaningful demand.
-9000,United States Government,medium_office,comstock,,MED,
-9010,Commonwealth of Massachusetts (retired code),medium_office,comstock,,LOW,Retired 2009. Single parcel still carrying it.
-9030,Municipalities / Districts (retired code),medium_office,comstock,,LOW,Retired 2009.
-9033,Public School,secondary_school,comstock,,MED,
-9050,Charitable Organizations (retired code),hospital,comstock,,LOW,Retired 2009. Description names private hospitals.
-9060,Religious Organizations (retired code),exclude,,,MED,Retired 2009.
-9200,Dept of Conservation and Recreation,exclude,,,MED,Parkland structures.
-9220,Dept of Corrections,medium_office,comstock,,LOW,
-9230,Dept of Public Health,hospital,comstock,,LOW,
-9240,Mass Highway Dept,exclude,,,MED,
-9270,"DOE: UMass, State and Community Colleges",university,modeled,,LOW,ComStock has no university type. Modelled: mixed academic and research load. Civic and Powerbank relevant; 1.9M sq ft across 8 parcels.
-9280,DCAM State Office Buildings,large_office,comstock,,MED,Two parcels averaging 437k sq ft. Almost certainly multi-metered.
-9290,Commonwealth of Massachusetts (other),medium_office,comstock,,LOW,
-9310,"Improved, Selectmen or City Council (Municipal)",medium_office,comstock,,MED,Civic and Powerbank relevant. 2.6M sq ft across 60 parcels.
-9320,"Vacant, Conservation (Municipal)",exclude,,,HIGH,Vacant.
-9340,"Improved, Education (Municipal or County)",secondary_school,comstock,,HIGH,Civic and Powerbank relevant. Largest municipal footprint in Worcester at 4.1M sq ft.
-9350,Improved Municipal Public Safety,small_office,comstock,,MED,Fire and police stations. Standby loads not modelled.
-9400,Elementary Level (Educational Private),primary_school,comstock,,MED,
-9410,Secondary Level (Educational Private),secondary_school,comstock,,MED,
-9420,College or University (Educational Private),university,modeled,,LOW,ComStock has no university type. 100 parcels; Worcester is a college city.
-942C,Exempt University Condo,university,modeled,,LOW,Condo. Metering split.
-9430,Other Educational (Private),secondary_school,comstock,,LOW,
-9510,Other (Charitable Org),small_office,comstock,,LOW,
-9512,Exempt Charitable Condo,exclude,,,LOW,Condo with no usable type.
-9530,Cemeteries,exclude,,,HIGH,
-9540,"Function Halls, Community Centers",retail_standalone,comstock,,LOW,Intermittent occupancy.
-9550,Hospitals (Charitable Org),hospital,comstock,7,HIGH,1.46M sq ft across 28 parcels. Large flat plateau; expected to rank poorly and to demonstrate why.
-9560,"Libraries, Museums (Charitable Org)",medium_office,comstock,,LOW,
-9570,Charitable Services,medium_office,comstock,,LOW,
-9580,"Recreation, Active Use (Charitable Org)",exclude,,,MED,
-9590,"Housing, Other (Charitable Org)",exclude,,,HIGH,Residential. Out of scope.
-9600,"Church, Mosque, Synagogue, Temple",exclude,,,HIGH,Intermittent occupancy. No shaveable weekday peak.
-9620,Other (Religious Org),exclude,,,HIGH,
-9700,Housing Authority,exclude,,,HIGH,Residential.
-9710,"Utility Authority: Electric, Light, Sewer, Water",exclude,,,HIGH,Utility asset.
-9720,Transportation Authority,warehouse,comstock,,LOW,Bus and maintenance depots.
-9730,"Vacant, Housing Authority",exclude,,,HIGH,Vacant.
-9750,"Vacant, Transportation Authority",exclude,,,HIGH,Vacant.
-9760,Worcester Redevelopment Authority,exclude,,,MED,
-995,"Other, Open Space",exclude,,,HIGH,344 parcels totalling 13 sq ft of building area.
+use_code,use_desc,archetype,source,icp_sector,confidence,note,multi_meter
+3000,Hotels,large_hotel,comstock,,MED,,0
+3010,Motels,small_hotel,comstock,,MED,,0
+3020,"Inns, Resorts, Tourist Homes",small_hotel,comstock,,LOW,Single parcel.,0
+3040,Nursing Homes,outpatient,comstock,,LOW,Nearest ComStock type. Residential occupancy pattern is not modelled.,0
+3050,Private Hospitals,hospital,comstock,7,HIGH,,0
+3060,Care and Treatment Facilities,outpatient,comstock,,LOW,,0
+3140,Trucking Terminals,warehouse,comstock,11,MED,Dock doors dominate; ambient warehouse shape.,0
+3150,"Piers, Wharves, Docks",warehouse,comstock,,LOW,,0
+3160,"Other Storage, Warehouse and Distribution",warehouse,comstock,11,HIGH,Largest clean ICP match in Worcester.,0
+3210,"Building materials, hardware, farm equipment",retail_standalone,comstock,,MED,,0
+3220,"Discount, Junior Department, Department Stores",retail_standalone,comstock,10,MED,,0
+3221,Retail Condo,strip_mall,comstock,,LOW,Condo: parcel is a unit not a building. Metering almost certainly split.,1
+3222,Commercial Building (unspecified),exclude,,,LOW,Single parcel with no usable description.,0
+3230,Shopping Centers / Malls,strip_mall,comstock,10,HIGH,,1
+3240,Supermarkets over 10000 sq ft,retail_standalone,comstock,10,MED,UNDERSTATES: ComStock generic retail carries no grocery refrigeration load. Real grocery peaks are higher and flatter.,0
+3250,Small Retail and Services under 10000 sq ft,retail_standalone,comstock,10,HIGH,,0
+3260,Eating and Drinking Establishments,full_service_restaurant,comstock,,MED,Code does not separate full from quick service; full service is the conservative pick.,0
+3280,Retail Condo Model 06,strip_mall,comstock,,LOW,Condo. See 3221.,1
+3300,Automotive Vehicle Sales and Service,auto_dealership,modeled,8,LOW,ComStock has no dealership type. Modelled: showroom lighting plus service bays.,0
+3310,Automotive Supplies Sales and Service,retail_standalone,comstock,,MED,,0
+3320,Auto Repair Facilities,auto_service,modeled,8,LOW,ComStock has no type. Modelled: compressors and lifts on an intermittent duty cycle.,0
+3330,Fuel Service Areas (fuel only),exclude,,,MED,Canopy lighting and pumps only. No shaveable peak.,0
+3340,Gasoline Service Stations with repair,auto_service,modeled,8,LOW,,0
+3350,Car Wash Facilities,auto_service,modeled,,LOW,Heavy motor load on a short cycle. Genuinely spiky but unvalidated.,0
+3360,Parking Garages,exclude,,,HIGH,Lighting and ventilation only. Flat load with no peak worth shaving.,0
+3380,Other Motor Vehicle Sales and Services,auto_service,modeled,8,LOW,,0
+3400,General Office Buildings,office,comstock,,HIGH,Size band (small/medium/large) resolved from BLD_AREA at scoring time.,0
+3410,Bank Buildings,small_office,comstock,,MED,,0
+3420,Medical Office Buildings,outpatient,comstock,,HIGH,,0
+3421,Professional Condo,small_office,comstock,,LOW,Condo. Metering almost certainly split.,1
+3430,Office Condo,small_office,comstock,,LOW,Condo. Metering almost certainly split.,1
+3450,Office Lab,laboratory,modeled,6,LOW,ComStock explicitly excludes laboratories. Modelled: high constant base load from fume hoods and process cooling.,0
+3510,Educational Properties,secondary_school,comstock,,MED,,0
+3520,"Day Care Centers, Adult",outpatient,comstock,,LOW,,0
+3530,Fraternal Organizations,exclude,,,MED,Intermittent occupancy. No industrial process load.,0
+3550,Funeral Homes,exclude,,,MED,,0
+3560,Miscellaneous Public Services,small_office,comstock,,LOW,,0
+3640,Legitimate Theaters,exclude,,,LOW,ComStock explicitly excludes theaters. Single parcel; not worth a modelled archetype.,0
+3710,Ice Skating Rinks / Facilities,ice_rink,modeled,9,LOW,ComStock explicitly excludes ice rinks. Modelled: continuous refrigeration plus resurfacing cycles. A named ICP sector with a real Worcester building behind it.,0
+3740,Health Spas,retail_standalone,comstock,,LOW,,0
+3760,Gymnasiums and Athletic Clubs,retail_standalone,comstock,,LOW,,0
+3770,"Archery, Billiards, other indoor",exclude,,,LOW,,0
+3800,Golf Courses,exclude,,,MED,Clubhouse only. Not a meaningful C&I load.,0
+4000,Buildings for manufacturing operations,industrial_manufacturing,modeled,"1,3,4,5",LOW,"COLLAPSE POINT. Every manufacturer in Worcester carries this one code: machine shops, metal fabricators, food and beverage producers, industrial materials makers and commercial laundries are indistinguishable here. Within this code the ranking is driven by floor area and rate class, not by load shape. Stated plainly on the method page.",0
+4010,Warehouses for storage of manufactured products,industrial_warehouse_process,modeled,2,LOW,"COLLAPSE POINT. Refrigerated cold storage sits inside this code alongside ambient warehousing with no way to separate them from assessor data. Modelled with a partial refrigeration duty cycle, which overstates ambient sites and understates true cold storage.",0
+4020,Office Building part of manufacturing operation,medium_office,comstock,,MED,Office occupancy despite the 4000-series code.,0
+4021,Industrial Condo,industrial_manufacturing,modeled,,LOW,Condo. Metering almost certainly split across units.,1
+4040,Research and Development facilities,laboratory,modeled,6,LOW,ComStock explicitly excludes laboratories.,0
+4100,Sand and Gravel Mining / Quarry,exclude,,,MED,"Process load is mobile plant, not building load.",0
+4240,Electricity Regulating Substations,exclude,,,HIGH,Utility asset. Not a customer.,0
+4270,Natural or Manufactured Gas Storage,exclude,,,HIGH,Utility asset.,0
+4280,Gas Pressure Control Stations,exclude,,,HIGH,Utility asset.,0
+4300,Telephone Exchange Stations,data_hall,modeled,,LOW,ComStock explicitly excludes data centers. Very high flat load; almost certainly a poor battery candidate but worth scoring to show why.,0
+4320,Cable TV Transmitting Facilities,data_hall,modeled,,LOW,,0
+4330,"Radio, Television Transmission Facilities",exclude,,,MED,Under 600 sq ft each. Below any meaningful demand.,0
+9000,United States Government,medium_office,comstock,,MED,,0
+9010,Commonwealth of Massachusetts (retired code),medium_office,comstock,,LOW,Retired 2009. Single parcel still carrying it.,0
+9030,Municipalities / Districts (retired code),medium_office,comstock,,LOW,Retired 2009.,0
+9033,Public School,secondary_school,comstock,,MED,,0
+9050,Charitable Organizations (retired code),hospital,comstock,,LOW,Retired 2009. Description names private hospitals.,0
+9060,Religious Organizations (retired code),exclude,,,MED,Retired 2009.,0
+9200,Dept of Conservation and Recreation,exclude,,,MED,Parkland structures.,0
+9220,Dept of Corrections,medium_office,comstock,,LOW,,0
+9230,Dept of Public Health,hospital,comstock,,LOW,,0
+9240,Mass Highway Dept,exclude,,,MED,,0
+9270,"DOE: UMass, State and Community Colleges",university,modeled,,LOW,ComStock has no university type. Modelled: mixed academic and research load. Civic and Powerbank relevant; 1.9M sq ft across 8 parcels.,0
+9280,DCAM State Office Buildings,large_office,comstock,,MED,Two parcels averaging 437k sq ft. Almost certainly multi-metered.,1
+9290,Commonwealth of Massachusetts (other),medium_office,comstock,,LOW,,0
+9310,"Improved, Selectmen or City Council (Municipal)",medium_office,comstock,,MED,Civic and Powerbank relevant. 2.6M sq ft across 60 parcels.,0
+9320,"Vacant, Conservation (Municipal)",exclude,,,HIGH,Vacant.,0
+9340,"Improved, Education (Municipal or County)",secondary_school,comstock,,HIGH,Civic and Powerbank relevant. Largest municipal footprint in Worcester at 4.1M sq ft.,0
+9350,Improved Municipal Public Safety,small_office,comstock,,MED,Fire and police stations. Standby loads not modelled.,0
+9400,Elementary Level (Educational Private),primary_school,comstock,,MED,,0
+9410,Secondary Level (Educational Private),secondary_school,comstock,,MED,,0
+9420,College or University (Educational Private),university,modeled,,LOW,ComStock has no university type. 100 parcels; Worcester is a college city.,0
+942C,Exempt University Condo,university,modeled,,LOW,Condo. Metering split.,1
+9430,Other Educational (Private),secondary_school,comstock,,LOW,,0
+9510,Other (Charitable Org),small_office,comstock,,LOW,,0
+9512,Exempt Charitable Condo,exclude,,,LOW,Condo with no usable type.,0
+9530,Cemeteries,exclude,,,HIGH,,0
+9540,"Function Halls, Community Centers",retail_standalone,comstock,,LOW,Intermittent occupancy.,0
+9550,Hospitals (Charitable Org),hospital,comstock,7,HIGH,1.46M sq ft across 28 parcels. Large flat plateau; expected to rank poorly and to demonstrate why.,0
+9560,"Libraries, Museums (Charitable Org)",medium_office,comstock,,LOW,,0
+9570,Charitable Services,medium_office,comstock,,LOW,,0
+9580,"Recreation, Active Use (Charitable Org)",exclude,,,MED,,0
+9590,"Housing, Other (Charitable Org)",exclude,,,HIGH,Residential. Out of scope.,0
+9600,"Church, Mosque, Synagogue, Temple",exclude,,,HIGH,Intermittent occupancy. No shaveable weekday peak.,0
+9620,Other (Religious Org),exclude,,,HIGH,,0
+9700,Housing Authority,exclude,,,HIGH,Residential.,0
+9710,"Utility Authority: Electric, Light, Sewer, Water",exclude,,,HIGH,Utility asset.,0
+9720,Transportation Authority,warehouse,comstock,,LOW,Bus and maintenance depots.,0
+9730,"Vacant, Housing Authority",exclude,,,HIGH,Vacant.,0
+9750,"Vacant, Transportation Authority",exclude,,,HIGH,Vacant.,0
+9760,Worcester Redevelopment Authority,exclude,,,MED,,0
+995,"Other, Open Space",exclude,,,HIGH,344 parcels totalling 13 sq ft of building area.,0

@@ -26,7 +26,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
-from shave import crosswalk
+from shave import crosswalk, ingest
 from shave.assumptions import LIKELY_SINGLE_METERED_MAX_SQFT
 from shave.crosswalk import CrosswalkError
 from shave.ingest import (
@@ -788,3 +788,60 @@ def test_a_directory_with_no_l3_files_raises(tmp_path):
 def test_a_missing_directory_raises():
     with pytest.raises(IngestError, match="not a directory"):
         load_municipality("/nonexistent/l3/dir", WORCESTER_TOWN_ID)
+
+
+def test_multi_meter_archetype_cannot_be_graded_high():
+    """Every other predicate holds; the archetype alone caps the row at MED."""
+    parcels = pd.DataFrame({
+        "sqft": [20_000.0],
+        "unique_archetype": [True],
+        "record_count": [1],
+        "owner_count": [1],
+        "collapse_point": [False],
+        "multi_meter": [True],
+    })
+
+    graded = ingest._apply_confidence(parcels)
+
+    assert graded["confidence"].iloc[0] == "MED"
+    assert "single_meter_archetype" in graded["confidence_reasons"].iloc[0]
+
+
+def test_single_meter_archetype_still_reaches_high():
+    parcels = pd.DataFrame({
+        "sqft": [20_000.0],
+        "unique_archetype": [True],
+        "record_count": [1],
+        "owner_count": [1],
+        "collapse_point": [False],
+        "multi_meter": [False],
+    })
+
+    assert ingest._apply_confidence(parcels)["confidence"].iloc[0] == "HIGH"
+
+
+@needs_worcester
+def test_multi_meter_reaches_the_output_from_the_crosswalk():
+    """End-to-end wiring, not just the predicate.
+
+    `_apply_confidence` reads `multi_meter` defensively, so if the column ever
+    stops being carried out of `_crosswalk_frame` the predicate silently grades
+    every row single-metered and no unit test notices. This pins the whole
+    path: crosswalk row -> crosswalk frame -> collapse -> output column ->
+    confidence reason.
+    """
+    parcels = load_municipality(WORCESTER_DIR, WORCESTER_TOWN_ID)
+
+    assert "multi_meter" in parcels.columns
+    flagged = parcels.loc[parcels["multi_meter"]]
+    assert len(flagged) > 0, "the crosswalk flags 8 use codes; none reached the output"
+
+    # Every strip mall is multi-tenant by definition, so none may grade HIGH.
+    strip = parcels.loc[parcels["archetype"] == "strip_mall"]
+    assert len(strip) > 0, "Worcester has strip malls; the crosswalk changed"
+    assert strip["multi_meter"].all()
+    assert not (strip["confidence"] == "HIGH").any()
+
+    # And the predicate name must actually appear as a reason on those rows.
+    assert flagged["confidence_reasons"].apply(
+        lambda t: "single_meter_archetype" in t).all()

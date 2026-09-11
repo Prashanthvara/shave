@@ -30,7 +30,8 @@ from shave.crosswalk import (
     CrosswalkError,
 )
 
-HEADER = ["use_code", "use_desc", "archetype", "source", "icp_sector", "confidence", "note"]
+HEADER = ["use_code", "use_desc", "archetype", "source", "icp_sector", "confidence",
+          "note", "multi_meter"]
 
 EXPECTED_ROWS = 95
 EXPECTED_COVERAGE = {
@@ -393,3 +394,52 @@ def test_the_error_message_names_the_file_and_the_line(tmp_path):
     assert path.name in message
     assert ":3" in message          # header is line 1, first data row line 2
     assert "3161" in message
+
+
+def test_strip_mall_rows_are_flagged_multi_meter():
+    """A strip mall is many service accounts. Demand bills per account, so a
+    parcel-level estimate for one is an aggregate nobody is billed for."""
+    rows = crosswalk.load()
+    strip = [r for r in rows.values() if r.archetype == "strip_mall"]
+    assert strip, "the crosswalk must still map something to strip_mall"
+    assert all(r.multi_meter for r in strip)
+
+
+def test_single_occupant_archetypes_are_not_flagged():
+    rows = crosswalk.load()
+    assert not rows["3050"].multi_meter, "a private hospital is one account"
+
+
+def test_multi_meter_rejects_an_unrecognised_value(tmp_path):
+    """A typo must not read as False. These columns only ever remove
+    confidence, so a misparse fails open and over-grades the row."""
+    path = write_crosswalk(tmp_path, [good_row(multi_meter="yes")])
+    with pytest.raises(CrosswalkError, match="multi_meter must be 0 or 1"):
+        crosswalk.load(path)
+
+
+def test_multi_meter_column_absent_defaults_to_false(tmp_path):
+    """A crosswalk written before the column existed still loads."""
+    path = tmp_path / "old.csv"
+    legacy = [h for h in HEADER if h != "multi_meter"]
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=legacy)
+        writer.writeheader()
+        writer.writerow({k: good_row().get(k, "") for k in legacy})
+    assert crosswalk.load(path)["3160"].multi_meter is False
+
+
+def test_every_shipped_crosswalk_row_has_exactly_the_header_fields():
+    """Regression: use code 4100 carried an unquoted comma in its note, so it
+    parsed as eight fields against a seven-field header and silently lost the
+    tail of the note. Harmless while `note` was last; the moment a column was
+    appended after it, the overflow landed in that new column instead."""
+    with crosswalk.CROSSWALK_PATH.open(newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        fields = set(reader.fieldnames or [])
+        for lineno, row in enumerate(reader, start=2):
+            assert None not in row, (
+                f"line {lineno} (use_code {row['use_code']}) has more fields than the "
+                f"header — an unquoted comma. Overflow: {row[None]!r}"
+            )
+            assert set(row) == fields, f"line {lineno} is missing fields"

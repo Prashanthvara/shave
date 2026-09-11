@@ -122,8 +122,8 @@ NONRESIDENTIAL_CLASSES: tuple[str, ...] = ("3", "4", "9")
 # RAIL_ROW and WATER polygons exist in TaxPar and never join to Assess.
 FEE_POLY_TYPE = "FEE"
 
-# The five HIGH-confidence predicates, in report order. A parcel is HIGH only if
-# all five hold. Names are returned verbatim in `confidence_reasons` so the UI
+# The six HIGH-confidence predicates, in report order. A parcel is HIGH only if
+# all six hold. Names are returned verbatim in `confidence_reasons` so the UI
 # can say which one failed rather than showing a bare chip.
 PREDICATES: tuple[str, ...] = (
     "unique_archetype",          # the use code maps 1:1 to one archetype
@@ -131,6 +131,7 @@ PREDICATES: tuple[str, ...] = (
     "single_record",             # exactly one Assess record at this LOC_ID
     "single_owner",              # one owner of record
     "within_single_meter_cap",   # BLD_AREA <= LIKELY_SINGLE_METERED_MAX_SQFT
+    "single_meter_archetype",    # the use code is not definitionally multi-tenant
 )
 
 # Not a predicate: a hard floor. The crosswalk marks 4000 and 4010 as COLLAPSE
@@ -143,7 +144,7 @@ OUTPUT_COLUMNS: tuple[str, ...] = (
     "loc_id", "prop_id", "use_code", "use_desc", "archetype", "source",
     "icp_sector", "sqft", "stories", "year_built", "owner", "site_addr",
     "city", "zip", "zoning", "assess_fy", "record_count", "owner_count",
-    "confidence", "confidence_reasons", "multi_use", "geometry",
+    "confidence", "confidence_reasons", "multi_use", "multi_meter", "geometry",
 )
 
 _FY_IN_NAME = re.compile(r"_FY(\d{2,4})", re.IGNORECASE)
@@ -230,6 +231,7 @@ def _crosswalk_frame(codes: Iterable[str]) -> pd.DataFrame:
                 # cannot distinguish. That is exactly the "maps 1:1" predicate.
                 "unique_archetype": cw.confidence == "HIGH",
                 "collapse_point": cw.is_collapse_point,
+                "multi_meter": cw.multi_meter,
             }
         )
     return pd.DataFrame(
@@ -237,6 +239,7 @@ def _crosswalk_frame(codes: Iterable[str]) -> pd.DataFrame:
         columns=[
             "use_code", "use_desc", "archetype", "source", "icp_sector",
             "excluded", "office_family", "unique_archetype", "collapse_point",
+            "multi_meter",
         ],
     )
 
@@ -464,6 +467,9 @@ def build_parcels(
             "confidence": parcels["confidence"].astype("string"),
             "confidence_reasons": parcels["confidence_reasons"],
             "multi_use": parcels["use_code_count"].fillna(1).gt(1),
+            # The crosswalk's domain judgment, carried to the output so the row
+            # detail can name it as the reason the row is not HIGH.
+            "multi_meter": parcels["multi_meter"].fillna(False).astype(bool),
             "geometry": parcels["geometry"],
         }
     )
@@ -502,12 +508,18 @@ def _year_built(parcels: pd.DataFrame) -> pd.Series:
 def _apply_confidence(parcels: pd.DataFrame) -> pd.DataFrame:
     """HIGH/MED/LOW plus the names of the predicates that failed.
 
-    HIGH is all five predicates. MED is exactly one failure. LOW is two or more,
+    HIGH is all six predicates. MED is exactly one failure. LOW is two or more,
     or a coarse 400-series code regardless of the rest. The failing names are
     carried out so the ranked view can say *why* a row is not HIGH instead of
     showing an unexplained chip.
     """
     sqft = pd.to_numeric(parcels["sqft"], errors="coerce")
+    # Read defensively: existing tests build parcel frames without this column,
+    # and a missing column is a KeyError where a missing value is not.
+    multi_meter = (
+        parcels["multi_meter"] if "multi_meter" in parcels
+        else pd.Series(False, index=parcels.index)
+    ).fillna(False).astype(bool)
     holds = pd.DataFrame(
         {
             "unique_archetype": parcels["unique_archetype"].fillna(False).astype(bool),
@@ -517,6 +529,7 @@ def _apply_confidence(parcels: pd.DataFrame) -> pd.DataFrame:
             "within_single_meter_cap": sqft.fillna(0.0)
             .le(LIKELY_SINGLE_METERED_MAX_SQFT)
             .to_numpy(),
+            "single_meter_archetype": ~multi_meter.to_numpy(),
         },
         index=parcels.index,
     )[list(PREDICATES)]
