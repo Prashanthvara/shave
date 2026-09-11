@@ -464,3 +464,17 @@ def test_scale_rejects_zero_or_negative_parcel_sqft():
             a.monthly_peaks()
         with pytest.raises(comstock.ComStockError, match="parcel sqft must be positive"):
             a.peak_day_window(1)
+
+
+@pytest.mark.network
+def test_every_comstock_archetype_worcester_needs_can_be_built():
+    """Not one building. Every ComStock archetype the real town actually uses."""
+    from shave.ingest import load_municipality
+    parcels = load_municipality(
+        "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester", town_id=348)
+    wanted = sorted(
+        parcels.loc[parcels["source"] == "comstock", "archetype"].dropna().unique())
+    assert wanted, "no ComStock-backed parcels found; ingest or crosswalk changed"
+    for name in wanted:
+        a = comstock.build_archetype(name, sqft=10_000.0)
+        assert (a.monthly_peaks() > 0).all(), f"{name} has a zero monthly peak"
