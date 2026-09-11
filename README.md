@@ -1,5 +1,8 @@
 # Shave
 
+**https://shave.pjayav.workers.dev**
+
+
 Ranks Massachusetts commercial and industrial buildings by how much of their
 monthly billed electrical demand a 250 kW / 522 kWh battery could actually
 absorb, and what that saves at the filed tariff rate.
