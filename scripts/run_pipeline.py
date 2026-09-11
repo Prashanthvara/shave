@@ -9,8 +9,9 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from pathlib import Path
 
-from shave import export, ingest, pipeline
+from shave import export, ingest, pipeline, regression
 
 DEFAULT_DIR = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
 DEFAULT_TOWN_ID = 348
@@ -51,7 +52,16 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     payload = export.build_export(scored, parcels, town=town, top_n=args.top_n)
+
+    report = regression.run(scored)
+    Path("docs/regression.md").write_text(
+        regression.render_markdown(report), encoding="utf-8"
+    )
+    payload["regression"] = report
     path = export.write_export(payload, args.out)
+    print("regression:",
+          {k: round(v["r2_size_and_rate"], 3) for k, v in report["by_source"].items()
+           if "r2_size_and_rate" in v}, file=sys.stderr)
 
     elapsed = time.perf_counter() - started
     size_kb = path.stat().st_size / 1024

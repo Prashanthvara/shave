@@ -3,7 +3,7 @@
 This document and `export.SCHEMA_VERSION` change together. It is the only interface between
 the Python pipeline and anything that renders it.
 
-**Current version: `1.0.0`**
+**Current version: `1.1.0`**
 
 ## Versioning rule
 
@@ -36,6 +36,7 @@ asserts it.
 | `counts` | object | See below. |
 | `assumptions` | array | Every row of `assumptions.PUBLISHED`, as `{key, value, provenance, source, note}`. Travels with the payload so the published assumptions are provably the computed ones. |
 | `lists` | object | `{comstock: [row], modeled: [row]}`. |
+| `regression` | object | *Added in 1.1.0.* `{ceiling, by_source}` — the two R-squared figures per list and the verdict against the threshold declared in advance. See `docs/regression.md`. |
 
 ### `counts`
 
