@@ -239,6 +239,19 @@ def demand_charge_for(rate_class: str) -> float:
     raise ValueError(f"unknown rate class: {rate_class!r}")
 
 
+def required_charge_kw(e_used_kwh: float, offpeak_hours: float) -> float:
+    """The average rate that refills `e_used_kwh` across the off-peak window.
+
+    This is what the site actually has to draw, which is never more than
+    USABLE_ENERGY_KWH / OFFPEAK_HOURS ~= 37.6 kW. The charger's 250 kW rating
+    is what it *could* draw, and using the rating where the requirement
+    belongs is a 6.6x overstatement of the recharge footprint.
+    """
+    if offpeak_hours <= 0.0:
+        return float("inf")
+    return e_used_kwh / offpeak_hours
+
+
 def recharge_feasible(
     e_used_kwh: float,
     offpeak_hours: float,
@@ -249,18 +262,24 @@ def recharge_feasible(
 
     Two independent predicates, both required:
 
-      1. There is enough off-peak time to push e_used back in at CHARGER_KW.
-      2. Charging on top of the existing off-peak load stays strictly below the
-         monthly threshold, so the recharge does not become the new billing
-         determinant.
+      1. There is enough off-peak time: the required rate is within what the
+         charger can deliver. CHARGER_KW is the right bound here -- it is a
+         capability question.
+      2. Charging on top of the existing off-peak load stays strictly below
+         the monthly threshold, so the recharge does not become the new
+         billing determinant. The REQUIRED rate is the right term here, not
+         the charger rating: the site draws what it needs, not what the
+         hardware could take. Testing the rating made this flag fire on 98%
+         of kept Worcester rows and told the reader nothing.
 
     Returns False rather than raising so the caller can flag the row
     "recharge-constrained" and keep it in the table.
     """
     if offpeak_hours <= 0.0:
         return False
-    time_ok = (e_used_kwh / offpeak_hours) <= CHARGER_KW
-    headroom_ok = (l_offpeak_max_kw + CHARGER_KW) < t_month
+    needed = required_charge_kw(e_used_kwh, offpeak_hours)
+    time_ok = needed <= CHARGER_KW
+    headroom_ok = (l_offpeak_max_kw + needed) < t_month
     return bool(time_ok and headroom_ok)
 
 

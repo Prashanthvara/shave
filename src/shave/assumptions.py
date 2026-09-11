@@ -311,6 +311,15 @@ PUBLISHED: tuple[Assumption, ...] = (
         "is the peak day, which changes every score.",
     ),
     Assumption(
+        "charger_rating", CHARGER_KW, "kW", "ASSUMED",
+        "Powertown spec page, read as symmetric with the discharge rating",
+        "The most the charger can draw, used only to ask whether the "
+        "overnight window is long enough. The recharge FOOTPRINT is the rate "
+        "the site actually needs -- at most 413.4 kWh over 11 hours, about "
+        "37.6 kW -- because the battery draws what it must replace, not what "
+        "the hardware could take.",
+    ),
+    Assumption(
         "intensity_industrial_manufacturing",
         ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["industrial_manufacturing"],
         "kWh/sq ft/yr", "DERIVED", "EIA MECS 2018 Tables 3.2 and 9.1",
