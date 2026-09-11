@@ -61,6 +61,7 @@ class ScoredRow:
     keep: bool
     band_reason: str | None
     recharge_feasible: bool
+    offpeak_max_kw: float
     months_at_power_cap: int
     flags: tuple[str, ...] = ()
     unscored_reason: str | None = None
@@ -97,11 +98,13 @@ def score_parcel(parcel: Mapping, archetype: Archetype) -> ScoredRow:
         archetype.peak_day_window(worst + 1), float(thresholds[worst])
     )
     recharge_ok = scorer.recharge_feasible(
-        e_used_kwh=e_used,
-        offpeak_hours=OFFPEAK_HOURS,
-        l_offpeak_max_kw=archetype.offpeak_max(worst + 1),
-        t_month=float(thresholds[worst]),
+        e_used_kwh=e_used, offpeak_hours=OFFPEAK_HOURS
     )
+    # Carried as evidence, not as a constraint. Overnight load is unbilled
+    # under this tariff, so it cannot veto a recharge -- but it is the number
+    # a reader needs to check that claim, and it is what a service-capacity
+    # question would start from.
+    offpeak_max_kw = float(archetype.offpeak_max(worst + 1))
 
     flags: list[str] = []
     months_at_cap = int(np.sum(shaveable >= RATED_POWER_KW - 1e-6))
@@ -140,6 +143,7 @@ def score_parcel(parcel: Mapping, archetype: Archetype) -> ScoredRow:
         keep=bool(band["keep"]),
         band_reason=band["reason"],
         recharge_feasible=recharge_ok,
+        offpeak_max_kw=offpeak_max_kw,
         months_at_power_cap=months_at_cap,
         flags=tuple(flags),
     )
@@ -165,6 +169,7 @@ def _unscored(parcel: Mapping, reason: str) -> ScoredRow:
         keep=False,
         band_reason=reason,
         recharge_feasible=False,
+        offpeak_max_kw=0.0,
         months_at_power_cap=0,
         unscored_reason=reason,
     )

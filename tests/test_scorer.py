@@ -321,60 +321,65 @@ def test_annual_savings_is_a_plain_dollar_sum():
 # ---------------------------------------------------------------------------
 
 
-def test_recharge_feasible_when_both_predicates_hold():
-    assert recharge_feasible(
-        e_used_kwh=USABLE_ENERGY_KWH,
-        offpeak_hours=11.0,
-        l_offpeak_max_kw=40.0,
-        t_month=400.0,
-    )
+def test_recharge_feasible_when_the_window_is_long_enough():
+    assert recharge_feasible(e_used_kwh=USABLE_ENERGY_KWH, offpeak_hours=11.0)
 
 
-def test_recharge_infeasible_on_time_alone():
-    """Enough headroom, not enough hours: 413 kWh into 1 h needs > CHARGER_KW."""
+def test_recharge_infeasible_when_the_energy_cannot_fit_the_window():
+    """413 kWh into 1 h needs more than the charger can deliver."""
     e_used = CHARGER_KW * 1.0 + 50.0
     assert e_used / 1.0 > CHARGER_KW
-    assert 40.0 + CHARGER_KW < 400.0  # the headroom predicate is satisfied
-    assert not recharge_feasible(e_used, 1.0, 40.0, 400.0)
-
-
-def test_recharge_infeasible_on_headroom_alone():
-    """Plenty of hours, but charging would set a new billed peak.
-
-    Intent unchanged; the numbers now express it against the rate the site
-    actually needs rather than the charger's rating. 100 kWh over 12 h is
-    8.3 kW, which is well inside what the charger can deliver, so the time
-    predicate passes -- and 40 + 8.3 still reaches a 45 kW threshold, so the
-    headroom predicate alone is what fails.
-    """
-    e_used, hours = 100.0, 12.0
-    needed = required_charge_kw(e_used, hours)
-    assert needed <= CHARGER_KW  # the time predicate is satisfied
-    t_month = 45.0
-    assert 40.0 + needed >= t_month
-    assert not recharge_feasible(e_used, hours, 40.0, t_month)
-
-
-def test_recharge_infeasible_when_both_fail():
-    assert not recharge_feasible(5000.0, 1.0, 240.0, 260.0)
+    assert not recharge_feasible(e_used, 1.0)
+    assert not recharge_feasible(5000.0, 1.0)
 
 
 def test_recharge_with_no_offpeak_window_returns_false_not_zero_division():
-    assert not recharge_feasible(100.0, 0.0, 10.0, 500.0)
-    assert not recharge_feasible(100.0, -3.0, 10.0, 500.0)
+    assert not recharge_feasible(100.0, 0.0)
+    assert not recharge_feasible(100.0, -3.0)
 
 
-def test_recharge_headroom_is_strict():
-    """Exactly equal is not feasible: it ties the existing billed peak.
+def test_the_charger_rating_boundary_is_inclusive():
+    """Exactly at the rating is deliverable; a hair above is not.
 
-    12 kWh over 12 h is exactly 1.0 kW, chosen so the boundary is an exact
-    float and the strictness is tested rather than the rounding.
+    Inherited from the deleted headroom-strictness test: the boundary was
+    worth pinning, and the time predicate is where a boundary now lives.
     """
-    e_used, hours = 12.0, 12.0
-    assert required_charge_kw(e_used, hours) == 1.0
-    t_month = 40.0 + 1.0
-    assert not recharge_feasible(e_used, hours, 40.0, t_month)
-    assert recharge_feasible(e_used, hours, 40.0, t_month + 0.01)
+    hours = 2.0
+    at_rating = CHARGER_KW * hours
+    assert recharge_feasible(at_rating, hours)
+    assert not recharge_feasible(at_rating + 1.0, hours)
+
+
+def test_overnight_load_cannot_veto_a_recharge_because_it_is_never_billed():
+    """REGRESSION, and the reason the headroom predicate was removed.
+
+    Earlier revisions also asked whether charging would push the site's
+    overnight load above the threshold it is holding. It cannot: the filed
+    tariff bills the greatest fifteen-minute peak *during the Peak hours
+    period*, 08:00-21:00 weekdays, so load between 21:00 and 08:00 is never
+    billed at any magnitude.
+
+    That test compared an unbilled quantity against a billed threshold. On
+    real Worcester data it failed 661 of 737 kept rows, and 300 of 300
+    sampled rows failed on it alone -- not because the recharge was large
+    (37.6 kW against a 250 kW charger) but because most commercial buildings
+    draw more overnight than the daytime level they shave to. A warning on
+    90% of a table about a charge the tariff does not levy is misinformation.
+
+    `recharge_feasible` therefore takes no overnight-load argument at all. If
+    someone reintroduces one, this test is the record of why they should not.
+    """
+    import inspect
+
+    params = set(inspect.signature(recharge_feasible).parameters)
+    assert params == {"e_used_kwh", "offpeak_hours"}, (
+        f"recharge_feasible grew a parameter: {sorted(params)}. Overnight load "
+        "is unbilled under this tariff; the real limit is service capacity, "
+        "which is not in any public assessor record."
+    )
+
+    # A site drawing an enormous overnight load still recharges fine.
+    assert recharge_feasible(e_used_kwh=USABLE_ENERGY_KWH, offpeak_hours=11.0)
 
 
 # ---------------------------------------------------------------------------
@@ -511,34 +516,7 @@ def test_interval_constant_drives_the_default_timestep():
     assert DEFAULT_DT_HOURS == pytest.approx(INTERVAL_MINUTES / 60.0)
 
 
-def test_headroom_is_tested_against_the_REQUIRED_rate_not_the_maximum():
-    """The bug this fixes made the flag fire on 719 of 737 Worcester rows.
-
-    A site holding a 150 kW threshold, drawing 40 kW overnight, that needs to
-    put back 413 kWh over 11 hours. The required rate is 37.6 kW, so charging
-    lands at 77.6 kW -- comfortably under the 150 kW threshold, and the
-    recharge is feasible. Testing against the 250 kW charger RATING instead
-    gives 290 kW and fails, which is what made the flag universal.
-    """
-    assert scorer.recharge_feasible(
-        e_used_kwh=413.4,
-        offpeak_hours=11.0,
-        l_offpeak_max_kw=40.0,
-        t_month=150.0,
-    ) is True
-
-
 def test_required_charge_rate_is_energy_over_the_window():
     assert scorer.required_charge_kw(413.4, 11.0) == pytest.approx(37.5818, rel=1e-4)
     assert scorer.required_charge_kw(0.0, 11.0) == 0.0
 
-
-def test_headroom_still_fails_when_the_site_itself_fills_the_window():
-    """The predicate must keep its teeth. A site already drawing 140 kW
-    overnight against a 150 kW threshold has 10 kW of room and needs 37.6."""
-    assert scorer.recharge_feasible(
-        e_used_kwh=413.4,
-        offpeak_hours=11.0,
-        l_offpeak_max_kw=140.0,
-        t_month=150.0,
-    ) is False

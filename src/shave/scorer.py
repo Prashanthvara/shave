@@ -252,35 +252,40 @@ def required_charge_kw(e_used_kwh: float, offpeak_hours: float) -> float:
     return e_used_kwh / offpeak_hours
 
 
-def recharge_feasible(
-    e_used_kwh: float,
-    offpeak_hours: float,
-    l_offpeak_max_kw: float,
-    t_month: float,
-) -> bool:
-    """Can the battery refill off-peak without creating a new billed peak?
+def recharge_feasible(e_used_kwh: float, offpeak_hours: float) -> bool:
+    """Can the battery refill inside the off-peak window?
 
-    Two independent predicates, both required:
+    One predicate: the rate the site needs is within what the charger can
+    deliver. `CHARGER_KW` is the right bound here -- it is a capability
+    question, and the only limit this tariff imposes on overnight charging.
 
-      1. There is enough off-peak time: the required rate is within what the
-         charger can deliver. CHARGER_KW is the right bound here -- it is a
-         capability question.
-      2. Charging on top of the existing off-peak load stays strictly below
-         the monthly threshold, so the recharge does not become the new
-         billing determinant. The REQUIRED rate is the right term here, not
-         the charger rating: the site draws what it needs, not what the
-         hardware could take. Testing the rating made this flag fire on 98%
-         of kept Worcester rows and told the reader nothing.
+    THERE IS NO HEADROOM TEST, AND THAT IS DELIBERATE. Earlier revisions also
+    asked whether charging would push the site's overnight load above the
+    threshold it is trying to hold, i.e. whether the recharge becomes the new
+    billing determinant. It cannot. The filed tariff bills the greatest
+    fifteen-minute peak *during the Peak hours period*, 08:00-21:00 weekdays;
+    see this module's companion note in `billing_window`, where the same
+    clause is quoted. Load between 21:00 and 08:00 is never billed at any
+    magnitude, so charging overnight cannot create a billed peak by
+    construction.
+
+    Keeping that test compared an unbilled quantity against a billed
+    threshold. Measured on Worcester it failed 661 of 737 kept rows -- 300 of
+    300 sampled failed on it alone -- not because the recharge was large but
+    because most commercial buildings draw more overnight than the daytime
+    level they are shaving to. A warning on 90% of a table about a charge the
+    tariff does not levy is misinformation, not caution.
+
+    The real constraint on overnight charging is the building's service
+    capacity, which is not in any public assessor record. That limit is named
+    on the method page rather than guessed at here.
 
     Returns False rather than raising so the caller can flag the row
     "recharge-constrained" and keep it in the table.
     """
     if offpeak_hours <= 0.0:
         return False
-    needed = required_charge_kw(e_used_kwh, offpeak_hours)
-    time_ok = needed <= CHARGER_KW
-    headroom_ok = (l_offpeak_max_kw + needed) < t_month
-    return bool(time_ok and headroom_ok)
+    return bool(required_charge_kw(e_used_kwh, offpeak_hours) <= CHARGER_KW)
 
 
 def annual_savings_usd(
