@@ -33,3 +33,12 @@ data/interim/
 
 # hand-authored domain data, not a build artifact
 !data/occupants.csv
+
+# site: the page source is tracked, every generated artifact is not.
+# This block SUPERSEDES the `public/*` + `!public/ranked.json` rules that
+# first-ranked-list Task 5 step 10 specifies. Applied in sequence those would
+# hide public/index.html and the deploy would serve nothing.
+node_modules/
+.wrangler/
+public/data/
+public/ranked.json
