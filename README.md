@@ -91,3 +91,22 @@ src/shave/
 uv sync
 uv run pytest
 ```
+
+### Rebuilding the published page
+
+    uv run python scripts/build_site.py     # pipeline -> public/data/*.json
+    NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+    "$NB/npx" wrangler dev                  # serve it locally on :8787
+    "$NB/npx" wrangler deploy               # publish
+
+`data/raw/` holds the MassGIS L3 extract and is gitignored, so a fresh clone
+must download it before the pipeline will run. `data/interim/comstock/` is the
+cached ComStock profile per archetype; delete it and
+`scripts/warm_comstock_cache.py` refetches from S3, about six minutes.
+
+`node`, `npm` and `npx` are nvm shell functions here, so `export PATH` does not
+reach them — a shell function takes precedence over a PATH lookup. Call the
+binaries by absolute path, as above.
+
+The full test suite takes about five minutes: several integration tests re-run
+the whole 2,099-parcel pipeline end to end rather than working from fixtures.
