@@ -123,6 +123,7 @@ def test_selection_is_deterministic():
 import numpy as np
 
 from shave.archetype import INTERVALS_PER_BILLED_DAY
+from shave.assumptions import INTERVAL_MINUTES, PEAK_HOUR_START
 from shave.billing_window import billed_days
 
 
@@ -185,6 +186,91 @@ def test_a_month_with_no_billed_intervals_raises():
     df = df[df["timestamp"].dt.month != 3]
     with pytest.raises(comstock.ComStockError, match="no billed intervals"):
         comstock.reduce_from_frame(1, df)
+
+
+def _slot(hour, minute=0):
+    """Expected position within the billed window, from the tariff constants."""
+    return ((hour - PEAK_HOUR_START) * 60 + minute) // INTERVAL_MINUTES
+
+
+def test_window_is_the_real_peak_day_not_a_per_slot_composite():
+    """A per-slot maximum across days must not be able to pass this.
+
+    Day 1 has a broad 80 kW plateau (its own max is 80). Day 2 has a single
+    120 kW spike and is otherwise at baseline (its own max is 120, so day 2
+    is the true peak day). A correct implementation returns day 2's whole
+    shape: baseline everywhere except the spike slot. An implementation that
+    instead took the per-slot maximum across all billed days would show 80
+    kW in the plateau slots too, because day 1's plateau beats the
+    baseline there. Asserting the plateau slots are baseline -- not 80 --
+    is what a composite-day bug cannot satisfy.
+    """
+    month = 1
+    days = billed_days(2018, month)
+    day1, day2 = days[0], days[1]
+
+    idx = pd.date_range("2018-01-01 00:00", periods=35040, freq="15min")
+    kw = pd.Series(10.0, index=idx)
+
+    plateau_hours = [9, 10, 11, 12]
+    plateau_slots = [_slot(h) for h in plateau_hours]
+    kw[(idx.day == day1.day) & (idx.month == month) & idx.hour.isin(plateau_hours)] = 80.0
+
+    spike_hour = 15
+    spike_slot = _slot(spike_hour)
+    kw[(idx.day == day2.day) & (idx.month == month) & (idx.hour == spike_hour)
+       & (idx.minute == 0)] = 120.0
+
+    df = pd.DataFrame({
+        "timestamp": idx,
+        comstock.TOTAL_ELECTRICITY_COL: kw.to_numpy() / comstock.KWH_PER_INTERVAL_TO_KW,
+    })
+    prof = comstock.reduce_from_frame(1, df)
+
+    assert prof.monthly_peak_kw[month - 1] == pytest.approx(120.0)
+    assert prof.windows[month - 1][spike_slot] == pytest.approx(120.0)
+    # The plateau slots belong to day 1, which lost. A composite-across-days
+    # implementation would show 80.0 here; the real peak day (day 2) is at
+    # baseline in these slots.
+    for s in plateau_slots:
+        assert prof.windows[month - 1][s] == pytest.approx(10.0), (
+            f"slot {s} is {prof.windows[month - 1][s]}, not the day-2 "
+            "baseline -- looks like a per-slot composite across days"
+        )
+
+
+def test_slot_index_matches_the_tariff_derived_formula():
+    """An off-by-one in the slot formula shifts every curve and must be caught.
+
+    Injects distinguishable values at the first billed minute (08:00), a
+    mid-window time (14:00) and the last billed interval's start (20:45) on
+    one known billed day, and asserts each lands at the position the tariff
+    constants say it should -- not merely somewhere in the 52-length array.
+    """
+    month = 1
+    day = billed_days(2018, month)[0]
+
+    idx = pd.date_range("2018-01-01 00:00", periods=35040, freq="15min")
+    kw = pd.Series(10.0, index=idx)
+
+    on_day = (idx.day == day.day) & (idx.month == month)
+    kw[on_day & (idx.hour == PEAK_HOUR_START) & (idx.minute == 0)] = 101.0
+    kw[on_day & (idx.hour == 14) & (idx.minute == 0)] = 102.0
+    kw[on_day & (idx.hour == 20) & (idx.minute == 45)] = 103.0
+
+    df = pd.DataFrame({
+        "timestamp": idx,
+        comstock.TOTAL_ELECTRICITY_COL: kw.to_numpy() / comstock.KWH_PER_INTERVAL_TO_KW,
+    })
+    prof = comstock.reduce_from_frame(1, df)
+    window = prof.windows[month - 1]
+
+    assert _slot(PEAK_HOUR_START) == 0
+    assert _slot(20, 45) == INTERVALS_PER_BILLED_DAY - 1 == 51
+
+    assert window[0] == pytest.approx(101.0)                       # 08:00
+    assert window[_slot(14)] == pytest.approx(102.0)                # 14:00 -> 24
+    assert window[INTERVALS_PER_BILLED_DAY - 1] == pytest.approx(103.0)  # 20:45
 
 
 @pytest.mark.network
