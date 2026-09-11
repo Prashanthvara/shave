@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shave",
+  "compatibility_date": "2026-09-01",
+  // Assets-only: no "main", so there is no Worker script at all. Nothing on
+  // the request path needs one. The spec's run_worker_first pattern is for
+  // the address-box API route, which is deferred to the next plan.
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  }
+}

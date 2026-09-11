@@ -34,11 +34,14 @@ drift, which is the exact failure the versioned contract exists to prevent.
 - **Python:** `>=3.11`, and **do not add any new Python dependency.** Everything needed is in `pyproject.toml`.
 - **JavaScript:** no runtime dependencies at all. The page loads no framework and no library. Dev dependencies are permitted for testing and deployment only (`vitest`, `jsdom`, `wrangler`).
 - **Never restate a constant.** Python imports from `src/shave/assumptions.py`. The page never hard-codes a tariff rate, a kW figure or a date — every number it shows comes from the JSON it was handed.
-- **`node`, `npm` and `npx` are nvm shell functions and are NOT on a non-interactive PATH.** Every command in this plan that needs them must first run:
+- **`node`, `npm` and `npx` are nvm SHELL FUNCTIONS, and exporting PATH is not enough** — a shell function takes precedence over a PATH lookup, so `export PATH=...; npx vitest` still runs nvm and prints its help text. Call the binaries by absolute path:
   ```bash
-  export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
+  NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+  "$NB/npm" install
+  "$NB/npx" vitest run
+  "$NB/npx" wrangler deploy
   ```
-  Verified present on 2026-09-11: node v22.18.0, npm 11.5.2.
+  Verified on 2026-09-11: node v22.18.0, npm 11.5.2, and `"$NB/npx" wrangler --version` prints 4.131.1. `command npx` also works; `export PATH` alone does not.
 - **`/usr/local/bin/wrangler` is a stub that prints "You have not installed wrangler".** Never invoke it. Install wrangler as a devDependency and always call it as `npx wrangler`.
 - **CSS tokens are defined on bare `:root` (light), then redefined under `@media (prefers-color-scheme: dark)` guarded as `:root:not([data-theme="light"])`, then again under `:root[data-theme="dark"]`.** Never style a component inside a theme block — always through the token. Copied verbatim from `DESIGN.md`.
 - **Radius is `3px` everywhere and there are no shadows in this system.** Separation comes from hairline rules and surface shifts.
@@ -580,10 +583,10 @@ proxies static files is a failure mode with no upside.
 - [ ] **Step 2: Install and verify the toolchain**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
 cd /Users/pjay/powertown
-npm install
-npx wrangler --version
+"$NB/npm" install
+"$NB/npx" wrangler --version
 ```
 
 Expected: node resolves to v22.18.0, `npx wrangler --version` prints a 4.x version.
@@ -796,10 +799,10 @@ Then append, unchanged from the mockup, the rule blocks for `.mast`, `.brandline
 - [ ] **Step 7: Serve it locally and confirm the shell renders**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
 cd /Users/pjay/powertown
-uv run python scripts/build_site.py --limit 200
-npx wrangler dev --port 8787 &
+uv run python scripts/build_site.py
+"$NB/npx" wrangler dev --port 8787 &
 sleep 4
 curl -s -o /dev/null -w 'index %{http_code}\n' http://127.0.0.1:8787/
 curl -s -o /dev/null -w 'css   %{http_code}\n' http://127.0.0.1:8787/app.css
@@ -943,8 +946,8 @@ describe("drawerHTML", () => {
 - [ ] **Step 2: Run them to verify they fail**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-npx vitest run
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+"$NB/npx" vitest run
 ```
 Expected: FAIL — `Failed to resolve import "../public/app.js"`.
 
@@ -1213,17 +1216,17 @@ if (typeof document !== "undefined" && document.getElementById("rows")) boot();
 - [ ] **Step 4: Run the render tests**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-npx vitest run
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+"$NB/npx" vitest run
 ```
 Expected: PASS, all 10.
 
 - [ ] **Step 5: Check it in a real browser**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-uv run python scripts/build_site.py --limit 200
-npx wrangler dev --port 8787
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+uv run python scripts/build_site.py
+"$NB/npx" wrangler dev --port 8787
 ```
 
 Open `http://127.0.0.1:8787/` and confirm, by eye:
@@ -1369,8 +1372,8 @@ describe("methodHTML", () => {
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-npx vitest run
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+"$NB/npx" vitest run
 ```
 Expected: FAIL — `methodHTML is not a function`.
 
@@ -1493,15 +1496,15 @@ And in `boot()`, replace the `if (window.renderMethod)` line with:
 - [ ] **Step 4: Run the tests**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-npx vitest run
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+"$NB/npx" vitest run
 ```
 Expected: PASS, all 15.
 
 - [ ] **Step 5: Check the method tab in the browser**
 
 ```bash
-npx wrangler dev --port 8787
+"$NB/npx" wrangler dev --port 8787
 ```
 
 Click **Method** and confirm all 15 limitations, all 4 gaps and all 23 assumptions render, and
@@ -1542,8 +1545,8 @@ ls -la public/data/
 - [ ] **Step 2: Authenticate wrangler**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-npx wrangler whoami
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+"$NB/npx" wrangler whoami
 ```
 
 If it reports no account, the user must run `npx wrangler login` themselves — it opens a browser
@@ -1552,8 +1555,8 @@ for OAuth. Ask them to run it and stop until they confirm; do not attempt to aut
 - [ ] **Step 3: Deploy**
 
 ```bash
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
-npx wrangler deploy
+NB="$HOME/.nvm/versions/node/v22.18.0/bin"
+"$NB/npx" wrangler deploy
 ```
 
 Record the `*.workers.dev` URL it prints.

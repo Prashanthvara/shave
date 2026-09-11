@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shave — which Massachusetts buildings to call first</title>
+<meta name="description" content="A ranked, confidence-tiered list of Massachusetts commercial and industrial sites where a 250 kW / 522 kWh battery captures a meaningful share of the monthly billing demand.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<a class="skip" href="#rows">Skip to the ranked list</a>
+<div class="wrap">
+
+  <div class="mast">
+    <div>
+      <div class="eyebrow">Prospecting &middot; Massachusetts &middot; National Grid territory</div>
+      <div class="brandline">
+        <span class="brand">Shave</span>
+        <span class="tag">Which buildings should we call first, and why</span>
+      </div>
+    </div>
+    <span class="mock-flag" id="vintage">Loading</span>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tab-main" aria-controls="v-main" aria-selected="true">Ranked view</button>
+    <button class="tab" role="tab" id="tab-method" aria-controls="v-method" aria-selected="false">Method</button>
+  </div>
+
+  <section id="v-main" role="tabpanel" aria-labelledby="tab-main">
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Profile source">
+        <button id="src-cs" aria-pressed="true">ComStock&#8209;backed</button>
+        <button id="src-md" aria-pressed="false">Modeled industrial</button>
+      </div>
+      <div class="seg" role="group" aria-label="View">
+        <button id="view-all" aria-pressed="true">Ranked by saving</button>
+        <button id="view-sweet" aria-pressed="false">Sweet spot</button>
+      </div>
+      <span class="vintage" id="counts"></span>
+    </div>
+
+    <div class="split">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Ranked by estimated annual demand-charge saving</span>
+          <span class="eyebrow" id="listsrc">ComStock&#8209;backed</span>
+        </div>
+        <p class="whysplit" id="whysplit"></p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th></th><th>Site</th><th>Load shape</th>
+                <th class="r">Peak / avg</th><th class="r">Rate</th>
+                <th class="r">Saving/yr</th><th>Conf</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="drawer" id="drawer"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-method" role="tabpanel" aria-labelledby="tab-method" hidden>
+    <div class="method">
+      <div class="prose" id="method-prose"></div>
+      <div>
+        <div class="cannot" id="method-cannot"></div>
+        <div class="foot" id="method-foot"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot" id="sitefoot">
+    Estimates from public data, never measurements. Source and method:
+    <a href="https://github.com/prashanthvara" rel="noopener">the repository</a>.
+  </div>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

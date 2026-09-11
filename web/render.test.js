@@ -1,0 +1,225 @@
+import { describe, expect, it } from "vitest";
+import {
+  chipClass,
+  drawerHTML,
+  fmtMoney,
+  methodHTML,
+  rowHTML,
+  sparkSVG,
+} from "../public/app.js";
+
+const ROW = {
+  loc_id: "F_1",
+  rank: 1,
+  occupant: "UMass Chan Medical School",
+  occupant_source: "https://www.umassmed.edu/",
+  owner: "COMMONWEALTH OF MASS EDUCATION",
+  site_addr: "360 PLANTATION ST",
+  city: "WORCESTER",
+  use_desc: "DOE: UMass, State and Community Colleges",
+  archetype: "university",
+  source: "modeled",
+  sqft: 1628495,
+  avg_12mo_kw: 3957.7,
+  peak_kw: 4500,
+  peak_to_avg: 1.14,
+  rate_class: "G-3",
+  demand_charge_per_kw: 10.48,
+  annual_savings_usd: 31440,
+  shaved_fraction: 0.0636,
+  shaveable_kw: 250,
+  confidence: "MED",
+  flags: ["power_limited"],
+  sweet_spot: false,
+  reason: "Runs flat at 1.1x its 12-month average, so there is little peak to remove.",
+  window_kw: [0.8, 0.82, 0.85, 0.9, 0.95, 1.0, 0.98, 0.96, 0.9, 0.86, 0.83, 0.81],
+};
+
+describe("fmtMoney", () => {
+  it("is whole dollars with separators, never cents", () => {
+    expect(fmtMoney(31440)).toBe("$31,440");
+    expect(fmtMoney(0)).toBe("$0");
+  });
+});
+
+describe("chipClass", () => {
+  it("maps confidence to its semantic token class", () => {
+    expect(chipClass("HIGH")).toBe("hi");
+    expect(chipClass("MED")).toBe("med");
+    expect(chipClass("LOW")).toBe("lo");
+  });
+});
+
+describe("sparkSVG", () => {
+  it("marks the peak with the accent and nothing else", () => {
+    const svg = sparkSVG([0.2, 1.0, 0.4], 68, 22);
+    expect(svg).toContain("<svg");
+    expect(svg).toContain('aria-hidden="true"');
+    // --signal is spent on the peak dot only. One occurrence, not two.
+    expect(svg.match(/var\(--signal\)/g)).toHaveLength(1);
+  });
+
+  it("survives an all-zero series without dividing by zero", () => {
+    const svg = sparkSVG([0, 0, 0], 68, 22);
+    expect(svg).toContain("<svg");
+    expect(svg).not.toContain("NaN");
+  });
+
+  it("survives an empty series", () => {
+    expect(sparkSVG([], 68, 22)).toContain("<svg");
+    expect(sparkSVG(undefined, 68, 22)).toContain("<svg");
+  });
+});
+
+describe("rowHTML", () => {
+  it("shows the occupant, not the owner of record", () => {
+    const html = rowHTML(ROW);
+    expect(html).toContain("UMass Chan Medical School");
+    expect(html).not.toContain("COMMONWEALTH OF MASS EDUCATION");
+  });
+
+  it("falls back to the use description when no occupant is resolved", () => {
+    const html = rowHTML({ ...ROW, occupant: "" });
+    expect(html).toContain("DOE: UMass, State and Community Colleges");
+    // and never silently presents the holding company as the occupant
+    expect(html).not.toContain("COMMONWEALTH OF MASS EDUCATION");
+  });
+
+  it("renders the rate class through its semantic class", () => {
+    expect(rowHTML(ROW)).toContain('class="rate g3"');
+    expect(rowHTML({ ...ROW, rate_class: "G-2" })).toContain('class="rate g2"');
+  });
+
+  it("escapes text that came from an assessor record", () => {
+    const html = rowHTML({ ...ROW, occupant: '<img src=x onerror="alert(1)">' });
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+});
+
+describe("drawerHTML", () => {
+  it("carries the lineage and the flags in plain words", () => {
+    const html = drawerHTML(ROW, { power_limited: "The battery hits its rating." });
+    expect(html).toContain("The battery hits its rating.");
+    expect(html).toContain("360 PLANTATION ST");
+  });
+
+  it("links the occupant source so the claim is checkable", () => {
+    expect(drawerHTML(ROW, {})).toContain('href="https://www.umassmed.edu/"');
+  });
+
+  it("says so plainly when the occupant is unresolved", () => {
+    const html = drawerHTML({ ...ROW, occupant: "", occupant_source: "" }, {});
+    expect(html).toContain("not yet resolved");
+  });
+});
+
+const METHOD = {
+  assumptions: [
+    {
+      key: "g2_demand_charge",
+      value: "15.06 $/kW",
+      provenance: "FILED",
+      source: "MECO summary of rates",
+      note: "Rate G-2 distribution demand charge.",
+    },
+  ],
+  limitations: [
+    { key: "no_measurement", statement: "This tool contains no per-building measurement." },
+  ],
+  known_gaps: [{ key: "one_municipality", statement: "Worcester only." }],
+  flag_meanings: { power_limited: "The battery hits its rating." },
+  lineage: { parcels: "MassGIS Level 3", tariff: "M.D.P.U. No. 1591" },
+  coverage: {
+    parcels_total: 2099,
+    kept: 737,
+    sweet_spot: 172,
+    assess_years: [2026],
+    unscored: { no_intensity_anchor: 6 },
+  },
+  occupants: { resolved_total: 4, top_n: 50, top_n_resolved: 4 },
+  regression: {
+    ceiling: 0.9,
+    by_source: {
+      comstock: {
+        n: 528,
+        r2_size_and_rate: 0.614,
+        r2_with_archetype: 0.878,
+        archetype_adds_little: false,
+      },
+      modeled: {
+        n: 209,
+        r2_size_and_rate: 0.493,
+        r2_with_archetype: 0.749,
+        archetype_adds_little: false,
+      },
+    },
+  },
+};
+
+describe("methodHTML", () => {
+  it("renders every limitation, because criterion 6 is the list", () => {
+    const { cannot } = methodHTML(METHOD);
+    expect(cannot).toContain("This tool contains no per-building measurement.");
+  });
+
+  it("renders every assumption with its source and provenance", () => {
+    const { prose } = methodHTML(METHOD);
+    expect(prose).toContain("15.06 $/kW");
+    expect(prose).toContain("MECO summary of rates");
+    expect(prose).toContain("FILED");
+  });
+
+  it("renders the real regression shape, per list, never undefined", () => {
+    const { prose } = methodHTML(METHOD);
+    expect(prose).toContain("0.614");
+    expect(prose).toContain("0.878");
+    expect(prose).toContain("0.493");
+    expect(prose).not.toContain("undefined");
+    expect(prose).not.toContain("NaN");
+  });
+
+  it("reports an unrun regression as unrun, never as zero", () => {
+    const { prose } = methodHTML({
+      ...METHOD,
+      regression: { status: "not yet run; the figures below are unreported, not zero" },
+    });
+    expect(prose).toContain("not yet run");
+    expect(prose).not.toMatch(/R².{0,12}0\.00/);
+  });
+
+  it("never claims a figure its own table contradicts", () => {
+    const { prose } = methodHTML(METHOD);
+    expect(prose).not.toContain("1.000 by construction");
+    expect(prose).toContain("power cap");
+  });
+
+  it("fires the verdict when size alone explains the ranking", () => {
+    const { prose } = methodHTML({
+      ...METHOD,
+      regression: {
+        ceiling: 0.9,
+        by_source: {
+          comstock: {
+            n: 10,
+            r2_size_and_rate: 0.97,
+            r2_with_archetype: 0.99,
+            archetype_adds_little: true,
+          },
+        },
+      },
+    });
+    expect(prose).toContain("adding little");
+    expect(prose).toContain("close to a size sort");
+  });
+
+  it("states the known gaps rather than hiding them", () => {
+    const { cannot } = methodHTML(METHOD);
+    expect(cannot).toContain("Worcester only.");
+  });
+
+  it("reports occupant coverage truthfully", () => {
+    const { foot } = methodHTML(METHOD);
+    expect(foot).toContain("4 of 50");
+  });
+});

@@ -1,0 +1,172 @@
+/* Shave — design system.
+   Ported from the approved mockup; see DESIGN.md. Tokens are defined on bare
+   :root (light), redefined under prefers-color-scheme guarded as
+   :root:not([data-theme="light"]), then again under :root[data-theme="dark"].
+   Never style a component inside a theme block — always through the token. */
+
+:root{
+  --ground:#F4F5F3; --surface:#FFFFFF; --surface-2:#EDEFEC;
+  --ink:#16191B; --ink-2:#5C666B; --ink-3:#8A9499;
+  --rule:#D8DCD9; --rule-strong:#BEC5C0;
+  --signal:#CC3311; --signal-soft:#CC331118;
+  --g2:#0B6E6E; --g3:#8A9499;
+  --ok:#15706B; --warn:#9A6700; --bad:#A33224;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:3px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1417; --surface:#161C20; --surface-2:#1D2529;
+    --ink:#E6EAE8; --ink-2:#93A0A5; --ink-3:#6F7C82;
+    --rule:#263036; --rule-strong:#33414A;
+    --signal:#FF5C3D; --signal-soft:#FF5C3D22;
+    --g2:#2AA7A0; --g3:#6F7C82;
+    --ok:#3FB5A6; --warn:#D2A03C; --bad:#E2705C;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1417; --surface:#161C20; --surface-2:#1D2529;
+  --ink:#E6EAE8; --ink-2:#93A0A5; --ink-3:#6F7C82;
+  --rule:#263036; --rule-strong:#33414A;
+  --signal:#FF5C3D; --signal-soft:#FF5C3D22;
+  --g2:#2AA7A0; --g3:#6F7C82;
+  --ok:#3FB5A6; --warn:#D2A03C; --bad:#E2705C;
+}
+
+*{box-sizing:border-box}
+body{margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1400px; margin:0 auto; padding-inline:20px; padding-block:20px}
+h1,h2,h3{margin:0; text-wrap:balance; font-weight:600; letter-spacing:-0.011em}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--signal); outline-offset:2px; border-radius:2px}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+.skip{position:absolute; left:-9999px; top:0; background:var(--ink); color:var(--ground);
+  padding:8px 12px; z-index:9}
+.skip:focus{left:8px; top:8px}
+/* Why the two lists are not one. Stated on the page, not just in the method. */
+/* Sits directly under the panel head, beside the source toggle it explains.
+   Below the table it would be 250 rows down, where nobody reads it. */
+.whysplit{margin:0; padding:9px 12px; border-bottom:1px solid var(--rule);
+  font-size:12px; color:var(--ink-2); max-width:78ch}
+
+/* ---------- masthead ---------- */
+.mast{display:flex; align-items:flex-end; justify-content:space-between; gap:20px;
+  flex-wrap:wrap; margin-bottom:14px}
+.brandline{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.brand{font-size:22px; font-weight:700; letter-spacing:-0.03em}
+.tag{color:var(--ink-2); font-size:12.5px}
+.eyebrow{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3)}
+.mock-flag{border:1px solid var(--rule-strong); border-radius:var(--r);
+  padding:3px 7px; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em;
+  color:var(--ink-2); text-transform:uppercase; white-space:nowrap}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex; gap:0; border-bottom:1px solid var(--rule); margin-bottom:0}
+.tab{appearance:none; background:none; border:0; border-bottom:2px solid transparent;
+  font:inherit; font-size:13px; color:var(--ink-2); padding:9px 14px; cursor:pointer}
+.tab[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--signal); font-weight:600}
+.tab:hover{color:var(--ink)}
+
+/* ---------- toolbar ---------- */
+.toolbar{display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+  padding:10px 0; border-bottom:1px solid var(--rule)}
+.seg{display:flex; border:1px solid var(--rule-strong); border-radius:var(--r); overflow:hidden}
+.seg button{appearance:none; background:var(--surface); border:0; font:inherit;
+  font-size:12.5px; padding:5px 11px; color:var(--ink-2); cursor:pointer}
+.seg button + button{border-left:1px solid var(--rule-strong)}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--ground); font-weight:600}
+.vintage{font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-left:auto}
+
+/* ---------- split ----------
+   Single column until the map lands. The class name, the panel structure and
+   the below-900px ordering rule are all kept, so restoring the two-column
+   grid is one declaration and an SVG, not a restructure. */
+.split{display:grid; grid-template-columns:minmax(0,1fr); gap:16px; margin-top:16px}
+@media (max-width:900px){
+  /* minmax(0,1fr), NOT 1fr. `1fr` is `minmax(auto,1fr)`, whose floor is the
+     content's min-content width -- here the table's 520px min-width -- so the
+     column stretches past the viewport and the BODY scrolls sideways instead
+     of the table scrolling inside .tablewrap. Measured at 400px: the panel
+     came out 534px wide. The approved mockup has the same defect. */
+  .split{grid-template-columns:minmax(0,1fr)}
+  .split > .panel:first-child{order:2}   /* ranked list leads on phones */
+  .split > .panel:last-child{order:1}
+}
+
+.panel{background:var(--surface); border:1px solid var(--rule); border-radius:var(--r)}
+.panel-head{display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:9px 12px; border-bottom:1px solid var(--rule)}
+.panel-title{font-size:12px; font-weight:600; letter-spacing:.01em}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; min-width:520px}
+thead th{text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:.09em;
+  text-transform:uppercase; color:var(--ink-3); font-weight:500;
+  padding:8px 10px; border-bottom:1px solid var(--rule-strong); white-space:nowrap}
+thead th.r, td.r{text-align:right}
+tbody tr{border-bottom:1px solid var(--rule); cursor:pointer}
+tbody tr:hover, tbody tr.on{background:var(--surface-2)}
+tbody tr.on{box-shadow:inset 3px 0 0 var(--signal)}
+td{padding:12px 10px; vertical-align:middle}  /* 44px min touch target */
+tbody tr.lead{background:var(--surface-2); box-shadow:inset 3px 0 0 var(--signal)}
+tbody tr.lead td{padding-top:14px; padding-bottom:6px}
+tr.leadreason td{padding:0 10px 14px 13px; background:var(--surface-2);
+  border-bottom:1px solid var(--rule-strong); cursor:default}
+tr.leadreason{cursor:default}
+tr.leadreason .reason{margin:0 0 2px; font-size:13.5px; max-width:56ch}
+tr.leadreason .mini{display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:8px}
+tr.leadreason .mini .eyebrow{white-space:nowrap}
+.rank{font-family:var(--mono); font-size:12px; color:var(--ink-3); width:1%}
+.who{font-weight:600; font-size:13px; line-height:1.25}
+.where{font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-top:1px}
+.money{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:13.5px;
+  font-weight:500; white-space:nowrap}
+.kw{font-family:var(--mono); font-size:11px; color:var(--ink-3); white-space:nowrap}
+.chip{display:inline-block; font-family:var(--mono); font-size:9.5px; letter-spacing:.07em;
+  padding:2px 5px; border-radius:2px; border:1px solid currentColor; white-space:nowrap}
+.chip.hi{color:var(--ok)} .chip.med{color:var(--warn)} .chip.lo{color:var(--ink-3)}
+.rate{font-family:var(--mono); font-size:11px; font-weight:600}
+.rate.g2{color:var(--g2)} .rate.g3{color:var(--g3)}
+.src{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; color:var(--ink-3)}
+.spark{display:block}
+
+/* ---------- drawer ---------- */
+.drawer{border-top:1px solid var(--rule-strong); padding:12px; background:var(--surface-2)}
+.reason{font-size:14px; line-height:1.45; margin:0 0 10px; text-wrap:pretty}
+.kv{display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:9px 16px; margin-top:10px}
+.kv div{min-width:0}
+.kv dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--ink-3)}
+.kv dd{margin:2px 0 0; font-size:12.5px; font-family:var(--mono); overflow-wrap:anywhere}
+.lineage{margin-top:12px; padding-top:9px; border-top:1px dashed var(--rule-strong);
+  font-size:11.5px; color:var(--ink-2); line-height:1.5}
+.dayprofile{margin-top:10px}
+
+/* ---------- method ---------- */
+.method{margin-top:16px; display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,340px); gap:16px}
+@media (max-width:900px){ .method{grid-template-columns:minmax(0,1fr)} }
+.prose{background:var(--surface); border:1px solid var(--rule); border-radius:var(--r);
+  padding:16px}
+.prose h2{font-size:15px; margin-bottom:6px}
+.prose p{margin:0 0 11px; max-width:65ch; color:var(--ink-2); font-size:13px; line-height:1.6}
+.prose p.lead{color:var(--ink); font-size:13.5px}
+.assum{width:100%; min-width:0}
+.assum th, .assum td{padding:6px 8px; font-size:11.5px}
+.assum td.v{font-family:var(--mono); white-space:nowrap}
+.assum td.s{color:var(--ink-3); font-size:10.5px}
+.cannot{background:var(--surface); border:1px solid var(--rule);
+  border-left:3px solid var(--signal); border-radius:var(--r); padding:14px}
+.cannot h2{font-size:13px; margin-bottom:8px}
+.cannot ul{margin:0 0 4px; padding-left:17px; color:var(--ink-2);
+  font-size:12.5px; line-height:1.65}
+.foot{margin-top:16px; padding-top:12px; border-top:1px solid var(--rule);
+  font-size:11.5px; color:var(--ink-3); line-height:1.6}
+
+[hidden]{display:none!important}
