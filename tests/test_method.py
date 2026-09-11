@@ -90,10 +90,14 @@ def test_an_unrun_regression_says_so_rather_than_reporting_zero():
 
 
 def test_a_supplied_regression_is_passed_through():
-    payload = method.method_payload(
-        _fake_scored(), regression={"r2_size_and_rate": 0.82, "r2_with_archetype": 1.0}
-    )
-    assert payload["regression"]["r2_size_and_rate"] == 0.82
+    """The real shape is {ceiling, by_source}, one entry per ranked list --
+    not a flat pair of figures. A test that models a shape the code never
+    produces teaches the next reader the wrong thing."""
+    report = {"ceiling": 0.9, "by_source": {
+        "comstock": {"n": 528, "r2_size_and_rate": 0.614,
+                     "r2_with_archetype": 0.878, "archetype_adds_little": False}}}
+    payload = method.method_payload(_fake_scored(), regression=report)
+    assert payload["regression"]["by_source"]["comstock"]["r2_size_and_rate"] == 0.614
 
 
 def test_the_payload_is_json_serialisable():

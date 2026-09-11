@@ -19,10 +19,11 @@
 
 ## Prerequisites — read this before Task 1
 
-**first-ranked-list Tasks 5 and 6 must be executed before this plan's Task 1.** They produce
-`src/shave/export.py`, `scripts/run_pipeline.py`, `docs/ranked-json-schema.md` and
-`src/shave/regression.py`. This plan consumes their output and deliberately does not duplicate
-them; if `src/shave/export.py` does not exist, stop and run that plan's Tasks 5 and 6 first.
+**SATISFIED on 2026-09-11.** first-ranked-list Tasks 5 and 6 are executed and committed
+(`cb988fc`, `7ba2cee`). `src/shave/export.py`, `scripts/run_pipeline.py`,
+`docs/ranked-json-schema.md` and `src/shave/regression.py` all exist, and
+`public/ranked.json` builds. This plan consumes their output and deliberately does not
+duplicate it.
 
 Task 1 below fails loudly and with that instruction if the export is missing, rather than
 silently building a second export path. Two export paths would be two places for the schema to
@@ -56,34 +57,43 @@ drift, which is the exact failure the versioned contract exists to prevent.
 
 ---
 
-## Verified facts, established on 2026-09-11
+## Verified facts, remeasured on 2026-09-11 after the prerequisite ran
 
 Do not re-derive these.
 
-**Pipeline output, real Worcester data:** 2,099 rows in, 2,099 out. Unscored exactly
-`{no_intensity_anchor: 6, no_floor_area: 1}`. 737 kept, 172 sweet spot. Kept by source:
-comstock 528, modeled 209. Kept by rate class: G-2 500, G-3 237. Max saving **$31,440**. Whole
-run 23.9 s including ingest.
+**Suite:** 935 passing, 4 deselected.
 
-**Flags across kept rows after the recharge fix:** `scale_extrapolation` 90 (12.2%),
-`thin_cohort` 25 (3.4%), `power_limited` 13 (1.8%), `recharge_constrained` **0**.
+**`public/ranked.json`, built by `scripts/run_pipeline.py`:** 661 KB, 25 s end to end.
+Top-level keys are `schema_version, generated_at, town, counts, assumptions, lists, regression`.
+`schema_version` is **`1.1.0`** — the `regression` key was added in 1.1.0, so the page's
+`SUPPORTED_MAJOR` of `"1"` still matches.
 
-**`method.method_payload(scored)`** returns keys `assumptions` (23 rows), `limitations` (15),
-`known_gaps` (4), `flag_meanings` (7), `lineage` (5), `coverage`, `occupants`, `regression`.
-It serialises to 13,999 bytes of JSON.
+**`counts`:** `parcels_in` 2,099 · `scored` 2,092 · `unscored` `{no_intensity_anchor: 6,
+no_floor_area: 1}` · `kept` 737 · `sweet_spot` 172 · `exported` `{comstock: 250, modeled: 209}`.
 
-**`occupants.load()`** holds 4 resolved rows. The top-ranked parcel `F_585218_2926290`
-(360 Plantation St) resolves to "UMass Chan Medical School — Aaron Lazare Medical Research
-Building", so success criterion 2 is met. `occupants.attach(scored)` adds `occupant` and
-`occupant_source`; unresolved rows get `""`, never the owner name.
+**The two lists, verified separate and each ranked within itself:**
 
-**`pipeline.ScoredRow` fields:** `loc_id, archetype, source, sqft, monthly_billed_demand_kw,
-monthly_shaveable_kw, avg_12mo_kw, peak_kw, peak_to_avg, rate_class, demand_charge_per_kw,
-annual_savings_usd, shaved_fraction, sweet_spot, keep, band_reason, recharge_feasible,
-offpeak_max_kw, months_at_power_cap, flags, unscored_reason`.
+| list | rank 1 | use description | saving | confidence |
+|---|---|---|---|---|
+| `comstock` | 25 TOBIAS BOLAND WAY | Shopping Centers / Malls | $24,659 | LOW |
+| `modeled` | 360 PLANTATION ST | DOE: UMass, State and Community Colleges | $31,440 | LOW |
 
-**`ingest.OUTPUT_COLUMNS`** additionally carries `site_addr, city, owner, use_desc, confidence,
-confidence_reasons, multi_meter, assess_fy`.
+The modelled list's top row is worth **more** than the ComStock list's. That is exactly why they
+are not merged: those two dollar figures are not comparable.
+
+**`regression`** is present in the export as `{ceiling: 0.9, by_source: {comstock: {...},
+modeled: {...}}}`. Measured: `comstock` R² 0.614 against size and rate class, 0.878 with
+archetype, n=528; `modeled` 0.493 and 0.749, n=209. Both are under the 0.90 ceiling, so the
+verdict text reads "the archetype layer adds spread" for both lists.
+
+**Every field in `site_data.REQUIRED_ROW_FIELDS` is present on a real exported row** — checked
+against `public/ranked.json` before this plan was revised. Rows also carry
+`monthly_billed_demand_kw` and `monthly_shaveable_kw`, which `window_series` and the
+`shaveable_kw` derivation read.
+
+**`occupants.load()`** holds 4 resolved rows. `F_577265_2910122` (25 Tobias Boland Way) is the
+top ComStock row and `F_585218_2926290` (360 Plantation St) is the top modelled row, so **both
+list heads carry a named business** and success criterion 2 holds on each.
 
 **Toolchain:** node v22.18.0 and npm 11.5.2 under `~/.nvm/versions/node/v22.18.0/bin`.
 `/usr/local/bin/wrangler` is a non-functional stub. No `package.json` exists in this repo yet.
@@ -203,6 +213,29 @@ def test_enrich_keeps_the_two_lists_separate_and_adds_what_the_page_needs():
     assert out["site_schema_version"] == site_data.SITE_SCHEMA_VERSION
 
 
+def test_enrich_carries_the_regression_the_export_already_ran():
+    """The export runs the regression and puts it in the payload. Dropping it
+    here would make the method page say "not yet run" while the numbers sit in
+    the object it was just handed."""
+    payload = {
+        "schema_version": "1.1.0", "counts": {},
+        "regression": {"ceiling": 0.9, "by_source": {
+            "comstock": {"n": 528, "r2_size_and_rate": 0.614,
+                         "r2_with_archetype": 0.878, "archetype_adds_little": False}}},
+        "lists": {"comstock": [{"loc_id": "L1", "rank": 1,
+                                "monthly_billed_demand_kw": [1.0] * 12,
+                                "monthly_shaveable_kw": [1.0] * 12}], "modeled": []},
+    }
+
+    out = site_data.enrich(payload, pd.DataFrame([{"keep": True, "sweet_spot": False,
+                                                   "unscored_reason": None,
+                                                   "annual_savings_usd": 1.0,
+                                                   "loc_id": "L1"}]))
+
+    assert "status" not in out["method"]["regression"], "it HAS run"
+    assert out["method"]["regression"]["by_source"]["comstock"]["r2_size_and_rate"] == 0.614
+
+
 def test_enrich_does_not_mutate_the_export_it_was_given():
     payload = {"schema_version": "1.0.0", "counts": {}, "lists": {"comstock": [
         {"loc_id": "L1", "rank": 1, "monthly_billed_demand_kw": [1.0] * 12,
@@ -306,7 +339,13 @@ def enrich(export_payload: dict, scored: pd.DataFrame) -> dict:
             )
 
     payload["site_schema_version"] = SITE_SCHEMA_VERSION
-    payload["method"] = method.method_payload(scored)
+    # The export already ran the regression and carries it. Passing it through
+    # rather than dropping it is the difference between a method page that
+    # reports R-squared and one that says "not yet run" while the figures sit
+    # in the very payload it was handed.
+    payload["method"] = method.method_payload(
+        scored, regression=export_payload.get("regression")
+    )
     return payload
 ```
 
@@ -1256,7 +1295,15 @@ const METHOD = {
   coverage: { parcels_total: 2099, kept: 737, sweet_spot: 172, assess_years: [2026],
               unscored: { no_intensity_anchor: 6 } },
   occupants: { resolved_total: 4, top_n: 50, top_n_resolved: 4 },
-  regression: { status: "not yet run; the figures below are unreported, not zero" },
+  regression: {
+    ceiling: 0.9,
+    by_source: {
+      comstock: { n: 528, r2_size_and_rate: 0.614, r2_with_archetype: 0.878,
+                  archetype_adds_little: false },
+      modeled: { n: 209, r2_size_and_rate: 0.493, r2_with_archetype: 0.749,
+                 archetype_adds_little: false },
+    },
+  },
 };
 
 describe("methodHTML", () => {
@@ -1272,10 +1319,39 @@ describe("methodHTML", () => {
     expect(prose).toContain("FILED");
   });
 
-  it("reports an unrun regression as unrun, never as zero", () => {
+  it("renders the real regression shape, per list, never undefined", () => {
     const { prose } = methodHTML(METHOD);
+    expect(prose).toContain("0.614");
+    expect(prose).toContain("0.878");
+    expect(prose).toContain("0.493");
+    expect(prose).not.toContain("undefined");
+    expect(prose).not.toContain("NaN");
+  });
+
+  it("reports an unrun regression as unrun, never as zero", () => {
+    const { prose } = methodHTML({
+      ...METHOD,
+      regression: { status: "not yet run; the figures below are unreported, not zero" },
+    });
     expect(prose).toContain("not yet run");
     expect(prose).not.toMatch(/R².{0,12}0\.00/);
+  });
+
+  it("never claims a figure its own table contradicts", () => {
+    const { prose } = methodHTML(METHOD);
+    expect(prose).not.toContain("1.000 by construction");
+    expect(prose).toContain("power cap");
+  });
+
+  it("fires the verdict when size alone explains the ranking", () => {
+    const { prose } = methodHTML({
+      ...METHOD,
+      regression: { ceiling: 0.9, by_source: { comstock: {
+        n: 10, r2_size_and_rate: 0.97, r2_with_archetype: 0.99,
+        archetype_adds_little: true } } },
+    });
+    expect(prose).toContain("adding little");
+    expect(prose).toContain("close to a size sort");
   });
 
   it("states the known gaps rather than hiding them", () => {
@@ -1317,14 +1393,52 @@ export function methodHTML(payload) {
     )
     .join("");
 
+  // The payload shape is {ceiling, by_source: {comstock: {...}, modeled: {...}}},
+  // one row per ranked list. Read it, never assert a figure: an earlier
+  // revision of the Python side printed "~1.000 by construction" above a table
+  // showing 0.878, and a method page that contradicts its own numbers is the
+  // one thing this artifact cannot afford.
+  const bySource = (reg && reg.by_source) || {};
+  const regressionRows = Object.keys(bySource)
+    .map((name) => {
+      const r = bySource[name];
+      if (r.skipped) return `<tr><td>${esc(name)}</td><td class="v r">${esc(r.n)}</td>` +
+        `<td class="v r">&mdash;</td><td class="v r">&mdash;</td></tr>`;
+      return `<tr><td>${esc(name)}</td><td class="v r">${esc(r.n)}</td>` +
+        `<td class="v r">${r.r2_size_and_rate.toFixed(3)}</td>` +
+        `<td class="v r">${r.r2_with_archetype.toFixed(3)}</td></tr>`;
+    })
+    .join("");
+  const verdicts = Object.keys(bySource)
+    .filter((name) => !bySource[name].skipped)
+    .map((name) => {
+      const r = bySource[name];
+      return r.archetype_adds_little
+        ? `<p><strong>${esc(name)}: the archetype layer is adding little.</strong> ` +
+          `Size and rate class alone explain ${r.r2_size_and_rate.toFixed(3)}, above the ` +
+          `${Number(reg.ceiling).toFixed(2)} threshold declared before the numbers were ` +
+          `computed. Read this list as close to a size sort.</p>`
+        : `<p><strong>${esc(name)}: the archetype layer adds spread.</strong> ` +
+          `Size and rate class alone explain ${r.r2_size_and_rate.toFixed(3)}; the load ` +
+          `shape accounts for the rest of the ordering.</p>`;
+    })
+    .join("");
+
   const regressionBlock = reg.status
     ? `<p>${esc(reg.status)}</p>`
-    : `<p>R&sup2; of annual saving against floor area and rate class alone: ` +
-      `<span class="num">${esc(reg.r2_size_and_rate)}</span>. Against floor area, ` +
-      `rate class and archetype: <span class="num">${esc(reg.r2_with_archetype)}</span>, ` +
-      `which is 1.000 by construction because the score is a deterministic function ` +
-      `of exactly those three fields. Both are published because the second one is ` +
-      `the honest thing to explain, not to hide.</p>`;
+    : `<div class="tablewrap"><table class="assum"><thead><tr>` +
+      `<th>List</th><th class="r">n</th>` +
+      `<th class="r">R&sup2; vs size &times; rate</th>` +
+      `<th class="r">R&sup2; vs size &times; rate &times; archetype</th>` +
+      `</tr></thead><tbody>${regressionRows}</tbody></table></div>` +
+      verdicts +
+      `<p>The second column is high because the score is a deterministic ` +
+      `function of exactly three public assessor fields and nothing else. It ` +
+      `falls short of 1.000 because this fit is linear in floor area within an ` +
+      `archetype and the scorer is not: the shaveable kilowatts come from a ` +
+      `root-find against a fixed energy budget and a 250 kW power cap, so a ` +
+      `site large enough to saturate the cap stops scaling with its floor area. ` +
+      `That kink is what separates this from a size sort.</p>`;
 
   const prose =
     `<h2>What this is</h2>` +
