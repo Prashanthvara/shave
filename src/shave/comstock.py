@@ -14,7 +14,8 @@ rows from the second.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import duckdb
@@ -30,7 +31,7 @@ from .assumptions import (
     INTERVAL_MINUTES,
     PEAK_HOUR_START,
 )
-from .billing_window import billed_mask
+from .billing_window import billed_mask, offpeak_mask
 
 # Worcester County, FIPS 25027, in NHGIS GISJOIN form.
 WORCESTER_COUNTY_GISJOIN = "G2500270"
@@ -119,6 +120,14 @@ class ComStockError(RuntimeError):
     """ComStock cannot supply a shape for what was asked."""
 
 
+#: How many buildings of a type to actually read before picking the median.
+#: The full Worcester County cohort runs to 396 for RetailStandalone; reading
+#: every one to rank it by intensity costs 13 x 396 S3 round trips for a
+#: quantity that a spread sample estimates well. 15 is 195 reads across all
+#: thirteen types, roughly six minutes on a one-time warm run.
+INTENSITY_SAMPLE = 15
+
+
 @dataclass(frozen=True)
 class Representative:
     bldg_id: int
@@ -126,16 +135,31 @@ class Representative:
     sqft: float
     cohort_size: int
     widened: bool
+    peak_intensity_w_per_sqft: float = 0.0
 
 
 def select_representative(
     index: pd.DataFrame,
     building_type: str,
     min_cohort: int = MIN_COHORT,
+    sample_size: int = INTENSITY_SAMPLE,
+    read_profile: Callable[..., "ReducedProfile"] | None = None,
+    conn: duckdb.DuckDBPyConnection | None = None,
 ) -> Representative:
-    """The median-floor-area building of its type, as that type's shape.
+    """The median-PEAK-INTENSITY building of its type, as that type's shape.
 
-    Ties and even cohorts take the lower middle rather than interpolating, so
+    The spec asks for the building whose annual load factor is the median of
+    its cohort. Reading every building's timeseries to rank the whole cohort
+    costs thousands of S3 round trips, so this samples `sample_size` buildings
+    spread evenly across the cohort's floor-area range, reads those, and takes
+    the median of the sample by peak intensity in W/sqft.
+
+    This replaces median-floor-area selection, which chose a building that was
+    typical in size and could be extreme in intensity. In Worcester it picked a
+    SmallOffice at 12.3 W/sqft against a cohort median near 3.9, inflating the
+    magnitude of 231 parcels roughly threefold.
+
+    Ties and even samples take the lower middle rather than interpolating, so
     the result is always a real building that can be cited by id.
     """
     cohort = index[index["building_type"] == building_type]
@@ -144,16 +168,39 @@ def select_representative(
             f"no ComStock buildings of type {building_type!r} in this index"
         )
 
-    ordered = cohort.sort_values(["sqft", "bldg_id"], kind="stable")
-    middle = (len(ordered) - 1) // 2  # lower middle for even counts
-    row = ordered.iloc[middle]
+    read = read_profile or reduce_timeseries
+    ordered = cohort.sort_values(["sqft", "bldg_id"], kind="stable").reset_index(drop=True)
+
+    # Evenly spaced positions across the size range, endpoints included, so the
+    # sample cannot sit on one end of the cohort.
+    take = min(sample_size, len(ordered))
+    positions = np.unique(np.linspace(0, len(ordered) - 1, take).round().astype(int))
+    sample = ordered.iloc[positions]
+
+    measured: list[tuple[float, int, float]] = []
+    for row in sample.itertuples(index=False):
+        sqft = float(row.sqft)
+        if sqft <= 0:
+            continue
+        profile = read(int(row.bldg_id), conn=conn, sqft=sqft)
+        intensity = float(profile.monthly_peak_kw.max()) * 1000.0 / sqft
+        measured.append((intensity, int(row.bldg_id), sqft))
+
+    if not measured:
+        raise ComStockError(
+            f"no {building_type!r} building in the sample has a usable floor area"
+        )
+
+    measured.sort()
+    intensity, bldg_id, sqft = measured[(len(measured) - 1) // 2]
 
     return Representative(
-        bldg_id=int(row["bldg_id"]),
+        bldg_id=bldg_id,
         building_type=building_type,
-        sqft=float(row["sqft"]),
+        sqft=sqft,
         cohort_size=len(ordered),
         widened=len(ordered) < min_cohort,
+        peak_intensity_w_per_sqft=intensity,
     )
 
 
@@ -178,6 +225,12 @@ class ReducedProfile:
     # reduce_timeseries, which know nothing about cohort selection.
     widened: bool = False
     cohort_size: int | None = None
+    #: Highest load seen in the 21:00-08:00 recharge window, per month. The
+    #: recharge headroom test reads this; without it the test can only be
+    #: stubbed, which is how a silently-passing predicate gets shipped.
+    offpeak_max_kw: np.ndarray = field(
+        default_factory=lambda: np.zeros(12, dtype=float)
+    )
 
     def to_frame(self) -> pd.DataFrame:
         return pd.DataFrame({
@@ -189,6 +242,7 @@ class ReducedProfile:
             "cohort_size": np.repeat(
                 np.nan if self.cohort_size is None else self.cohort_size, 12
             ),
+            "offpeak_max_kw": self.offpeak_max_kw,
             **{f"i{i:02d}": self.windows[:, i] for i in range(INTERVALS_PER_BILLED_DAY)},
         })
 
@@ -214,6 +268,10 @@ class ReducedProfile:
             cohort_size = None if pd.isna(raw_cohort) else int(raw_cohort)
         else:
             cohort_size = None
+        if "offpeak_max_kw" in df.columns:
+            offpeak = df["offpeak_max_kw"].to_numpy(dtype=float)
+        else:
+            offpeak = np.zeros(12, dtype=float)
         return cls(
             bldg_id=int(df["bldg_id"].iloc[0]),
             monthly_peak_kw=df["monthly_peak_kw"].to_numpy(dtype=float),
@@ -221,6 +279,7 @@ class ReducedProfile:
             sqft=None if np.isnan(sqft) else sqft,
             widened=widened,
             cohort_size=cohort_size,
+            offpeak_max_kw=offpeak,
         )
 
 
@@ -230,6 +289,13 @@ def reduce_from_frame(
     """Twelve monthly peaks and twelve peak-day windows, billed intervals only."""
     ts = pd.DatetimeIndex(raw["timestamp"])
     kw = raw[TOTAL_ELECTRICITY_COL].to_numpy(dtype=float) * KWH_PER_INTERVAL_TO_KW
+
+    # Off-peak maximum per month, computed BEFORE the billed mask drops the
+    # overnight data. Vectorised: np.maximum.at over a month index, no loop.
+    offpeak_max = np.zeros(12, dtype=float)
+    night = offpeak_mask(ts)
+    if night.any():
+        np.maximum.at(offpeak_max, ts.month.to_numpy()[night] - 1, kw[night])
 
     keep = billed_mask(ts)
     ts, kw = ts[keep], kw[keep]
@@ -259,7 +325,9 @@ def reduce_from_frame(
         worst = inverse == int(per_day_max.argmax())
         windows[m - 1, m_slot[worst]] = m_kw[worst]
 
-    return ReducedProfile(int(bldg_id), peaks, windows, sqft)
+    return ReducedProfile(
+        int(bldg_id), peaks, windows, sqft, offpeak_max_kw=offpeak_max
+    )
 
 
 def reduce_timeseries(
@@ -350,6 +418,12 @@ class ComStockArchetype:
             raise ValueError(f"month must be 1-12, got {month}")
         return self.profile.windows[month - 1] * self._scale
 
+    def offpeak_max(self, month: int) -> float:
+        """Highest 21:00-08:00 load in this month, scaled to the parcel."""
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be 1-12, got {month}")
+        return float(self.profile.offpeak_max_kw[month - 1] * self._scale)
+
 
 def build_archetype(
     archetype_name: str,
@@ -378,7 +452,9 @@ def build_archetype(
         conn = connect()
         try:
             index = load_county_index(county_gisjoin, conn=conn)
-            rep = select_representative(index, ARCHETYPE_TO_COMSTOCK[archetype_name])
+            rep = select_representative(
+                index, ARCHETYPE_TO_COMSTOCK[archetype_name], conn=conn
+            )
             profile = reduce_timeseries(rep.bldg_id, conn=conn, sqft=rep.sqft)
         finally:
             conn.close()

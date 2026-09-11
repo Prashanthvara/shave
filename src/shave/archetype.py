@@ -65,6 +65,13 @@ class Archetype(Protocol):
         """
         ...
 
+    def offpeak_max(self, month: int) -> float:
+        """Highest load in the 21:00-08:00 recharge window, in kW.
+
+        `month` is 1-12. The recharge headroom test reads this.
+        """
+        ...
+
 
 def _jitter_offset(parcel_id: str, max_intervals: int = 2) -> int:
     """Deterministic per-parcel shift-start jitter, in intervals.
@@ -164,6 +171,7 @@ class FixtureArchetype:
     monthly_peak_kw: np.ndarray
     windows: np.ndarray  # shape (12, INTERVALS_PER_BILLED_DAY)
     source: Source = field(default="modeled")
+    offpeak_max_kw: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.monthly_peak_kw = np.asarray(self.monthly_peak_kw, dtype=float)
@@ -175,6 +183,12 @@ class FixtureArchetype:
                 f"windows must have shape (12, {INTERVALS_PER_BILLED_DAY}), "
                 f"got {self.windows.shape}"
             )
+        if self.offpeak_max_kw is None:
+            self.offpeak_max_kw = np.zeros(12, dtype=float)
+        else:
+            self.offpeak_max_kw = np.asarray(self.offpeak_max_kw, dtype=float)
+        if self.offpeak_max_kw.shape != (12,):
+            raise ValueError("offpeak_max_kw must have shape (12,)")
 
     def monthly_peaks(self) -> np.ndarray:
         return self.monthly_peak_kw
@@ -183,6 +197,11 @@ class FixtureArchetype:
         if not 1 <= month <= 12:
             raise ValueError(f"month must be 1-12, got {month}")
         return self.windows[month - 1]
+
+    def offpeak_max(self, month: int) -> float:
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be 1-12, got {month}")
+        return float(self.offpeak_max_kw[month - 1])
 
 
 def scale_to_floor_area(archetype: ModeledArchetype, sqft: float, kw_per_1000sqft: float) -> ModeledArchetype:

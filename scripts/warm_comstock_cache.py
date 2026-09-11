@@ -35,8 +35,14 @@ def main() -> int:
             # Worcester County) -- surfaced here rather than only living in
             # the cached parquet, so whoever runs this can see it directly.
             flag = "  ** WIDENED **" if a.widened else ""
+            # Peak intensity and overnight load are the two quantities the
+            # representative-selection fix exists to get right, so the warm run
+            # prints them rather than needing a second pass over the parquet.
+            intensity = peak * 1000.0 / a.sqft
+            offpeak = a.profile.offpeak_max_kw.max() * (a.sqft / a.profile.sqft)
             print(f"  {name:26s} bldg {a.profile.bldg_id:>7}  "
                   f"{a.profile.sqft:>9,.0f} sqft  peak {peak:7.1f} kW  "
+                  f"{intensity:5.1f} W/sqft  offpeak {offpeak:7.1f} kW  "
                   f"cohort {a.cohort_size:>4}{flag}  "
                   f"{time.perf_counter() - started:5.1f}s")
         except Exception as exc:  # noqa: BLE001 - report every failure, fail at the end

@@ -260,3 +260,20 @@ def billed_days(year: int, month: int) -> list[date]:
         for d in (date(year, month, day) for day in range(1, days_in_month + 1))
         if is_billed_day(d)
     ]
+
+
+#: Hours available to recharge: 21:00 to 08:00 the next morning.
+OFFPEAK_HOURS = PEAK_HOUR_START + 24 - PEAK_HOUR_END
+
+
+def offpeak_mask(index: pd.DatetimeIndex) -> np.ndarray:
+    """True where an interval falls in the overnight recharge window.
+
+    Any day of the week. This is a clock test, not a tariff test: the tariff
+    has nothing to say about when a battery may charge, only about which
+    demand it bills. Weekend daytime is deliberately excluded -- charging then
+    is possible but it is not the 11-hour window the recharge test reasons
+    about, and including it would let a weekend peak veto a weekday recharge.
+    """
+    hour = index.hour.to_numpy()
+    return (hour >= PEAK_HOUR_END) | (hour < PEAK_HOUR_START)

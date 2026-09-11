@@ -82,42 +82,13 @@ def _index(rows):
     return pd.DataFrame(rows, columns=["bldg_id", "building_type", "sqft"])
 
 
-def test_selects_the_median_sqft_building_of_the_cohort():
-    idx = _index([(i, "Warehouse", float(sqft))
-                  for i, sqft in enumerate(range(1000, 1000 + 31 * 100, 100))])
-    rep = comstock.select_representative(idx, "Warehouse")
-    assert rep.cohort_size == 31
-    assert rep.widened is False
-    assert rep.sqft == 2500.0  # the 16th of 31, the exact median
 
-
-def test_median_of_an_even_cohort_takes_the_lower_of_the_two_middles():
-    # Deterministic tie-break: never interpolate, always name a real building.
-    idx = _index([(i, "Warehouse", float(s)) for i, s in enumerate([10, 20, 30, 40] * 8)])
-    rep = comstock.select_representative(idx, "Warehouse", min_cohort=4)
-    assert rep.sqft == 20.0
-    assert rep.bldg_id in set(idx["bldg_id"])
-
-
-def test_small_cohort_widens_and_says_so():
-    idx = _index([(1, "Hospital", 300000.0), (2, "Hospital", 375000.0)])
-    rep = comstock.select_representative(idx, "Hospital", min_cohort=30)
-    assert rep.widened is True
-    assert rep.cohort_size == 2
 
 
 def test_unknown_building_type_raises():
     idx = _index([(1, "Warehouse", 10000.0)])
     with pytest.raises(comstock.ComStockError, match="no ComStock buildings"):
         comstock.select_representative(idx, "Hospital")
-
-
-def test_selection_is_deterministic():
-    idx = _index([(i, "Warehouse", float(s))
-                  for i, s in enumerate([500, 900, 700, 1100, 300] * 8)])
-    picks = {comstock.select_representative(idx, "Warehouse", min_cohort=5).bldg_id
-             for _ in range(10)}
-    assert len(picks) == 1
 
 
 import numpy as np
@@ -478,3 +449,184 @@ def test_every_comstock_archetype_worcester_needs_can_be_built():
     for name in wanted:
         a = comstock.build_archetype(name, sqft=10_000.0)
         assert (a.monthly_peaks() > 0).all(), f"{name} has a zero monthly peak"
+
+
+def _reader(intensities=None):
+    """A fake timeseries read. `intensities` maps bldg_id -> W/sqft; anything
+    absent is flat at 4.0, so a test that does not care about intensity gets a
+    cohort the tie-break orders by bldg_id."""
+    intensities = intensities or {}
+
+    def read(bldg_id, conn=None, sqft=None):
+        w = intensities.get(bldg_id, 4.0)
+        return comstock.ReducedProfile(
+            bldg_id=bldg_id,
+            monthly_peak_kw=np.full(12, w * sqft / 1000.0),
+            windows=np.zeros((12, comstock.INTERVALS_PER_BILLED_DAY)),
+            sqft=sqft,
+        )
+
+    return read
+
+
+def test_cohort_size_counts_the_whole_cohort_not_the_sample():
+    """Selection reads 15 buildings; `cohort_size` must still report all 31.
+    If it reported the sample, every cohort would look thin and `widened`
+    would fire on well-sampled types."""
+    idx = _index([(i, "Warehouse", float(sqft))
+                  for i, sqft in enumerate(range(1000, 1000 + 31 * 100, 100))])
+    rep = comstock.select_representative(idx, "Warehouse", read_profile=_reader())
+    assert rep.cohort_size == 31
+    assert rep.widened is False
+    assert rep.bldg_id in set(idx["bldg_id"]), "must name a real building"
+
+
+def test_median_of_an_even_sample_takes_the_lower_of_the_two_middles():
+    # Deterministic tie-break: never interpolate, always name a real building.
+    idx = _index([(i, "Warehouse", 1000.0) for i in range(4)])
+    intensities = {0: 1.0, 1: 2.0, 2: 3.0, 3: 4.0}
+    rep = comstock.select_representative(
+        idx, "Warehouse", min_cohort=4, read_profile=_reader(intensities)
+    )
+    assert rep.peak_intensity_w_per_sqft == pytest.approx(2.0), "lower middle of 4"
+    assert rep.bldg_id == 1
+
+
+def test_small_cohort_widens_and_says_so():
+    idx = _index([(1, "Hospital", 300000.0), (2, "Hospital", 375000.0)])
+    rep = comstock.select_representative(
+        idx, "Hospital", min_cohort=30, read_profile=_reader()
+    )
+    assert rep.widened is True
+    assert rep.cohort_size == 2
+
+
+def test_selection_is_deterministic():
+    idx = _index([(i, "Warehouse", float(s))
+                  for i, s in enumerate([500, 900, 700, 1100, 300] * 8)])
+    read = _reader({i: 1.0 + (i % 7) for i in range(40)})
+    picks = {comstock.select_representative(
+        idx, "Warehouse", min_cohort=5, read_profile=read).bldg_id
+        for _ in range(10)}
+    assert len(picks) == 1
+
+
+def test_reduce_captures_the_overnight_maximum():
+    """The recharge test needs the off-peak load, which the billed mask drops."""
+    index = pd.date_range("2018-01-01", "2018-12-31 23:45", freq="15min")
+    kw = np.full(index.size, 10.0)
+    # A 300 kW spike at 03:00 on 8 March: outside the billed window, so it must
+    # not reach monthly_peak_kw, and must reach offpeak_max_kw for March.
+    night = (index.month == 3) & (index.day == 8) & (index.hour == 3)
+    kw[night] = 300.0
+    raw = pd.DataFrame({
+        "timestamp": index,
+        comstock.TOTAL_ELECTRICITY_COL: kw / comstock.KWH_PER_INTERVAL_TO_KW,
+    })
+
+    profile = comstock.reduce_from_frame(1, raw, sqft=1000.0)
+
+    assert profile.offpeak_max_kw.shape == (12,)
+    assert profile.offpeak_max_kw[2] == pytest.approx(300.0)
+    assert profile.monthly_peak_kw[2] == pytest.approx(10.0)
+    # Every other month sees only the flat 10 kW overnight.
+    assert profile.offpeak_max_kw[0] == pytest.approx(10.0)
+
+
+def test_representative_is_the_median_by_peak_intensity_not_by_size():
+    """Median floor area picks a typical-sized building that can be an
+    intensity outlier. Worcester's SmallOffice pick sat at 12.3 W/sqft against
+    a cohort median of 3.9 — a 3x magnitude inflation on 231 parcels."""
+    index = pd.DataFrame({
+        "bldg_id": [1, 2, 3],
+        "building_type": ["SmallOffice"] * 3,
+        "sqft": [1_000.0, 2_000.0, 3_000.0],
+    })
+    # Building 2 is the median by SIZE but the extreme by INTENSITY.
+    intensities = {1: 3.0, 2: 12.0, 3: 5.0}
+
+    def fake_read(bldg_id, conn=None, sqft=None):
+        peak = intensities[bldg_id] * sqft / 1000.0  # W/sqft -> kW
+        return comstock.ReducedProfile(
+            bldg_id=bldg_id,
+            monthly_peak_kw=np.full(12, peak),
+            windows=np.zeros((12, comstock.INTERVALS_PER_BILLED_DAY)),
+            sqft=sqft,
+        )
+
+    rep = comstock.select_representative(
+        index, "SmallOffice", min_cohort=1, read_profile=fake_read
+    )
+
+    assert rep.bldg_id == 3, "median intensity is 5.0 W/sqft, which is building 3"
+    assert rep.peak_intensity_w_per_sqft == pytest.approx(5.0)
+
+
+def test_representative_sampling_spans_the_size_range():
+    """A sample drawn off one end of the size range is not a cohort median."""
+    n = 100
+    index = pd.DataFrame({
+        "bldg_id": list(range(n)),
+        "building_type": ["Warehouse"] * n,
+        "sqft": [1_000.0 * (i + 1) for i in range(n)],
+    })
+    seen: list[int] = []
+
+    def fake_read(bldg_id, conn=None, sqft=None):
+        seen.append(bldg_id)
+        return comstock.ReducedProfile(
+            bldg_id=bldg_id,
+            monthly_peak_kw=np.full(12, 1.0),
+            windows=np.zeros((12, comstock.INTERVALS_PER_BILLED_DAY)),
+            sqft=sqft,
+        )
+
+    comstock.select_representative(
+        index, "Warehouse", min_cohort=1, sample_size=5, read_profile=fake_read
+    )
+
+    assert len(seen) == 5
+    assert min(seen) < n // 4, "sample must reach the small end"
+    assert max(seen) > 3 * n // 4, "sample must reach the large end"
+
+
+def test_representative_sample_larger_than_cohort_reads_every_building():
+    index = pd.DataFrame({
+        "bldg_id": [7, 8],
+        "building_type": ["Hospital"] * 2,
+        "sqft": [100_000.0, 200_000.0],
+    })
+    seen: list[int] = []
+
+    def fake_read(bldg_id, conn=None, sqft=None):
+        seen.append(bldg_id)
+        return comstock.ReducedProfile(
+            bldg_id=bldg_id,
+            monthly_peak_kw=np.full(12, 2.0),
+            windows=np.zeros((12, comstock.INTERVALS_PER_BILLED_DAY)),
+            sqft=sqft,
+        )
+
+    rep = comstock.select_representative(
+        index, "Hospital", min_cohort=30, sample_size=15, read_profile=fake_read
+    )
+
+    assert sorted(seen) == [7, 8]
+    assert rep.widened is True, "a 2-building cohort is still thin"
+    assert rep.cohort_size == 2
+
+
+def test_comstock_archetype_still_satisfies_the_protocol():
+    profile = comstock.ReducedProfile(
+        bldg_id=1,
+        monthly_peak_kw=np.full(12, 50.0),
+        windows=np.full((12, comstock.INTERVALS_PER_BILLED_DAY), 40.0),
+        sqft=10_000.0,
+        offpeak_max_kw=np.full(12, 12.0),
+    )
+    arch = comstock.ComStockArchetype(profile=profile, sqft=20_000.0)
+
+    assert isinstance(arch, Archetype)
+    assert arch.offpeak_max(1) == pytest.approx(24.0), "scales with the parcel"
+    with pytest.raises(ValueError):
+        arch.offpeak_max(13)
