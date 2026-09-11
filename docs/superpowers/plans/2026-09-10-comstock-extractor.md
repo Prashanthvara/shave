@@ -358,9 +358,18 @@ product depends on. Picking one building keeps a real shape. Picking the
 *median by floor area* keeps a typical one and is reproducible, which
 matters because this choice goes on the method page.
 
-**Why widening.** Hospital has 2 buildings in Worcester County. A median over
-2 is arbitrary. Below `MIN_COHORT` the selection widens from county to the
-whole state, and the result records that it did so.
+**Why the thin-cohort flag.** Hospital has 2 buildings in Worcester County. A
+median over 2 is arbitrary. `select_representative` records `widened=True` when
+the cohort is below `MIN_COHORT`.
+
+**It flags, it does not re-query.** An earlier draft of this plan said selection
+"widens from county to the whole state." It does not, and building that would
+mean reading all 14 MA county files instead of one. Only Hospital is affected,
+and a state-level median could hand a Worcester hospital a Boston hospital's
+shape, which is not obviously better than a real local one. Task 4 carries the
+flag through to `ComStockArchetype` so a thin-cohort archetype is visibly
+low-confidence downstream. `load_state_index` stays available as additive future
+work if a 2-building median proves too arbitrary.
 
 - [ ] **Step 1: Write the failing tests**
 
