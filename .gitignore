@@ -30,3 +30,6 @@ data/interim/
 
 # local-only Claude Code settings
 .claude/settings.local.json
+
+# hand-authored domain data, not a build artifact
+!data/occupants.csv
