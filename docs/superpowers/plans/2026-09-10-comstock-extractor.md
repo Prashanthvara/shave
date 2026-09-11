@@ -42,29 +42,37 @@ s3://oedi-data-lake/nrel-pds-building-stock/end-use-load-profiles-for-us-buildin
   /by_state_and_county/basic/parquet/state=MA/county=G2500270
   /MA_G2500270_baseline_basic.parquet
 ```
-Worcester County (FIPS 25027) is `G2500270`. 19,077 rows. Relevant columns, quoted exactly because the names contain dots:
+Worcester County (FIPS 25027) is `G2500270`. **19,077 rows but only 2,443 distinct
+buildings** — ComStock apportions each building across census tracts with its own
+`weight` column, so a single `bldg_id` appears up to 116 times. Type and floor area are
+constant within a `bldg_id` (verified: 0 inconsistent), so the index must be deduped with
+`SELECT DISTINCT` or a caller refetches the same timeseries from S3 up to 116 times.
+Relevant columns, quoted exactly because the names contain dots:
 `bldg_id`, `upgrade`, `"in.sqft..ft2"`, `"in.comstock_building_type"`, `"in.comstock_building_type_group"`, `"in.county_name"`.
 
-Building types present in Worcester County, with counts:
+Building types in Worcester County, by **distinct building**, with the raw row count
+beside it so the difference stays visible:
 
-| `in.comstock_building_type` | n | median sqft |
+| `in.comstock_building_type` | buildings | rows |
 |---|---|---|
-| SmallOffice | 4586 | 5,500 |
-| RetailStandalone | 4053 | 5,500 |
-| Warehouse | 3329 | 10,000 |
-| RetailStripmall | 2542 | 5,500 |
-| FullServiceRestaurant | 1854 | 2,000 |
-| MediumOffice | 871 | 46,000 |
-| PrimarySchool | 449 | 35,000 |
-| QuickServiceRestaurant | 382 | 2,000 |
-| SecondarySchool | 380 | 46,000 |
-| LargeOffice | 211 | 175,000 |
-| LargeHotel | 207 | 58,000 |
-| SmallHotel | 113 | 5,500 |
-| Outpatient | 98 | 35,000 |
-| **Hospital** | **2** | 337,500 |
+| RetailStandalone | 396 | 4053 |
+| SmallOffice | 367 | 4586 |
+| Warehouse | 279 | 3329 |
+| MediumOffice | 258 | 871 |
+| FullServiceRestaurant | 250 | 1854 |
+| RetailStripmall | 192 | 2542 |
+| LargeOffice | 154 | 211 |
+| SecondarySchool | 138 | 380 |
+| PrimarySchool | 128 | 449 |
+| LargeHotel | 99 | 207 |
+| Outpatient | 79 | 98 |
+| QuickServiceRestaurant | 64 | 382 |
+| SmallHotel | 37 | 113 |
+| **Hospital** | **2** | 2 |
 
-**Hospital n=2 is the reason Task 2 has a widening rule.** A median over two buildings is not a selection.
+**Hospital is the reason Task 2 has a widening rule.** A median over two buildings is not
+a selection. It is also the *only* type below `MIN_COHORT = 30`; SmallHotel at 37 is the
+next lowest and clears it, so the threshold is correctly calibrated on real counts.
 
 **Timeseries**, one parquet per building:
 ```
