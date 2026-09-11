@@ -73,3 +73,48 @@ def test_energy_column_is_kwh_per_interval_not_kw():
         f"annual intensity {intensity:.1f} kWh/sqft is outside the plausible "
         "range for a commercial building; the units assumption is wrong"
     )
+
+
+import pandas as pd
+
+
+def _index(rows):
+    return pd.DataFrame(rows, columns=["bldg_id", "building_type", "sqft"])
+
+
+def test_selects_the_median_sqft_building_of_the_cohort():
+    idx = _index([(i, "Warehouse", float(sqft))
+                  for i, sqft in enumerate(range(1000, 1000 + 31 * 100, 100))])
+    rep = comstock.select_representative(idx, "Warehouse")
+    assert rep.cohort_size == 31
+    assert rep.widened is False
+    assert rep.sqft == 2500.0  # the 16th of 31, the exact median
+
+
+def test_median_of_an_even_cohort_takes_the_lower_of_the_two_middles():
+    # Deterministic tie-break: never interpolate, always name a real building.
+    idx = _index([(i, "Warehouse", float(s)) for i, s in enumerate([10, 20, 30, 40] * 8)])
+    rep = comstock.select_representative(idx, "Warehouse", min_cohort=4)
+    assert rep.sqft == 20.0
+    assert rep.bldg_id in set(idx["bldg_id"])
+
+
+def test_small_cohort_widens_and_says_so():
+    idx = _index([(1, "Hospital", 300000.0), (2, "Hospital", 375000.0)])
+    rep = comstock.select_representative(idx, "Hospital", min_cohort=30)
+    assert rep.widened is True
+    assert rep.cohort_size == 2
+
+
+def test_unknown_building_type_raises():
+    idx = _index([(1, "Warehouse", 10000.0)])
+    with pytest.raises(comstock.ComStockError, match="no ComStock buildings"):
+        comstock.select_representative(idx, "Hospital")
+
+
+def test_selection_is_deterministic():
+    idx = _index([(i, "Warehouse", float(s))
+                  for i, s in enumerate([500, 900, 700, 1100, 300] * 8)])
+    picks = {comstock.select_representative(idx, "Warehouse", min_cohort=5).bldg_id
+             for _ in range(10)}
+    assert len(picks) == 1

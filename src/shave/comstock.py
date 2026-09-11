@@ -14,6 +14,8 @@ rows from the second.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import duckdb
 import pandas as pd
 
@@ -101,3 +103,50 @@ def load_county_index(
         if own:
             conn.close()
     return df
+
+
+# Below this many buildings of a type in a county, the median is arbitrary and
+# selection widens to the whole state. Hospital has 2 in Worcester County.
+MIN_COHORT = 30
+
+
+class ComStockError(RuntimeError):
+    """ComStock cannot supply a shape for what was asked."""
+
+
+@dataclass(frozen=True)
+class Representative:
+    bldg_id: int
+    building_type: str
+    sqft: float
+    cohort_size: int
+    widened: bool
+
+
+def select_representative(
+    index: pd.DataFrame,
+    building_type: str,
+    min_cohort: int = MIN_COHORT,
+) -> Representative:
+    """The median-floor-area building of its type, as that type's shape.
+
+    Ties and even cohorts take the lower middle rather than interpolating, so
+    the result is always a real building that can be cited by id.
+    """
+    cohort = index[index["building_type"] == building_type]
+    if cohort.empty:
+        raise ComStockError(
+            f"no ComStock buildings of type {building_type!r} in this index"
+        )
+
+    ordered = cohort.sort_values(["sqft", "bldg_id"], kind="stable")
+    middle = (len(ordered) - 1) // 2  # lower middle for even counts
+    row = ordered.iloc[middle]
+
+    return Representative(
+        bldg_id=int(row["bldg_id"]),
+        building_type=building_type,
+        sqft=float(row["sqft"]),
+        cohort_size=len(ordered),
+        widened=len(ordered) < min_cohort,
+    )
