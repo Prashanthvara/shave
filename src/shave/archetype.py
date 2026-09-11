@@ -39,7 +39,6 @@ from .assumptions import INTERVAL_MINUTES, PEAK_HOUR_END, PEAK_HOUR_START
 Source = Literal["comstock", "modeled"]
 
 INTERVALS_PER_BILLED_DAY = (PEAK_HOUR_END - PEAK_HOUR_START) * 60 // INTERVAL_MINUTES
-DAY_TYPES = ("weekday", "saturday", "sunday")
 
 #: Interval width in hours, and the full 24-hour grid at that resolution.
 #: The full day lives here beside the billed window because it is a property
@@ -263,18 +262,3 @@ class FixtureArchetype:
             raise ValueError(f"month must be 1-12, got {month}")
         return float(self.offpeak_max_kw[month - 1])
 
-
-def scale_to_floor_area(archetype: ModeledArchetype, sqft: float, kw_per_1000sqft: float) -> ModeledArchetype:
-    """Rescale a modelled archetype to a specific building's floor area.
-
-    Magnitude comes from published intensity data, never from the shape source.
-    The shape datasets available for industrial load are non-US; their shapes
-    transfer, their magnitudes do not.
-    """
-    if sqft <= 0:
-        raise ValueError(f"sqft must be positive, got {sqft}")
-    scaled = ModeledArchetype(**{
-        k: v for k, v in archetype.__dict__.items() if k not in ("source", "peak_kw")
-    })
-    scaled.peak_kw = (sqft / 1000.0) * kw_per_1000sqft
-    return scaled

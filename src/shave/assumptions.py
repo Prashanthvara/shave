@@ -149,18 +149,6 @@ COMSTOCK_S3_BASE = (
 )
 
 
-def comstock_glob() -> str:
-    """S3 glob for MA individual-building timeseries, partition-pruned.
-
-    Verified 2026-09-10: 3,595 MA parquet files reachable anonymously via
-    DuckDB httpfs. Pruning on both upgrade= and state= is not optional; without
-    it the query scans the national dataset over HTTP.
-    """
-    return (
-        f"{COMSTOCK_S3_BASE}/{COMSTOCK_RELEASE}/timeseries_individual_buildings"
-        f"/by_state/upgrade={COMSTOCK_UPGRADE}/state={COMSTOCK_STATE}/*.parquet"
-    )
-
 
 # --------------------------------------------------------------------------
 # Electricity intensity anchors for the modelled half of the library.
@@ -189,12 +177,38 @@ def comstock_glob() -> str:
 
 BTU_PER_KWH = 3412.0
 
+#: MECS 2018 Table 3.2, column "Net Electricity(b)", trillion Btu. Read from
+#: eia.gov/consumption/manufacturing/data/2018/xls/Table3_2.xlsx on 2026-09-11.
+MECS_NET_ELECTRICITY_TBTU: dict[str, float] = {
+    "332": 124.0,   # Fabricated Metal Products
+    "333": 80.0,    # Machinery
+}
+
+#: MECS 2018 Table 9.1, enclosed floorspace of all buildings, million sq ft.
+#: eia.gov/consumption/manufacturing/data/2018/xls/Table9_1.xlsx
+MECS_FLOORSPACE_MSQFT: dict[str, float] = {
+    "332": 1530.0,
+    "333": 1021.0,
+}
+
+
+def mecs_intensity(naics: str) -> float:
+    """kWh per square foot per year for one MECS subsector.
+
+    Derived, not quoted: trillion Btu of net electricity over million square
+    feet of enclosed floorspace, converted at BTU_PER_KWH. The arithmetic
+    lives here rather than in a comment so that the DERIVED provenance on the
+    published row is a statement about the code, not about a past session.
+    """
+    btu = MECS_NET_ELECTRICITY_TBTU[naics] * 1e12
+    sqft = MECS_FLOORSPACE_MSQFT[naics] * 1e6
+    return btu / BTU_PER_KWH / sqft
+
 ELECTRIC_INTENSITY_KWH_PER_SQFT_YR: dict[str, float] = {
-    # MECS NAICS 332 Fabricated Metal Products: 124 trillion Btu net
-    # electricity over 1,530 million sq ft = 23.75. NAICS 333 Machinery:
-    # 80 over 1,021 = 22.96. The machine shops and metal fabricators of
-    # Worcester are 332/333; the mean of the two, 23.36, is the anchor.
-    "industrial_manufacturing": 23.4,
+    # The machine shops and metal fabricators of Worcester are NAICS 332 and
+    # 333. The mean of the two subsector intensities is the anchor: 23.75 and
+    # 22.96, for 23.36. Computed rather than quoted -- see mecs_intensity.
+    "industrial_manufacturing": (mecs_intensity("332") + mecs_intensity("333")) / 2,
     # CBECS C22 "Refrigerated" (under Warehouse and storage), 29.6 kWh/sq ft.
     # Cold storage is the ICP sector this stands in for. Note the contrast
     # with "Nonrefrigerated" at 5.3 in the same table: refrigeration is about
@@ -321,7 +335,10 @@ PUBLISHED: tuple[Assumption, ...] = (
     ),
     Assumption(
         "intensity_industrial_manufacturing",
-        ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["industrial_manufacturing"],
+        # Rounded for the page only; the scorer uses the full derived value.
+        # The siblings below are published at the precision EIA prints them,
+        # and a lone 17-digit float beside them reads as a leaked intermediate.
+        round(ELECTRIC_INTENSITY_KWH_PER_SQFT_YR["industrial_manufacturing"], 2),
         "kWh/sq ft/yr", "DERIVED", "EIA MECS 2018 Tables 3.2 and 9.1",
         'Mean of NAICS 332 Fabricated Metal Products (124 trillion Btu net electricity over 1,530 million sq ft = 23.75) and NAICS 333 Machinery (80 over 1,021 = 22.96), the two subsectors the machine shops and metal fabricators of Worcester sit in. DERIVED rather than FILED: the Btu-to-kWh conversion and the two-subsector mean are both choices.',
     ),

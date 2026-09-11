@@ -232,3 +232,22 @@ def test_modeled_archetype_satisfies_the_protocol_again():
     assert arch.monthly_peaks().shape == (12,)
     assert arch.peak_day_window(7).shape == (INTERVALS_PER_BILLED_DAY,)
     assert isinstance(arch.offpeak_max(7), float)
+
+
+def test_the_superseded_asserted_intensity_api_is_gone():
+    """`scale_to_floor_area(archetype, sqft, kw_per_1000sqft)` took an ASSERTED
+    intensity. The shipped chain derives the load factor from the declared
+    shape and takes magnitude from published intensity -- the opposite, and
+    the whole point of the modelled-magnitude work.
+
+    It survived with zero callers. A superseded mechanism left in the public
+    surface is a trap: the next reader uses it and gets a magnitude this
+    project deliberately stopped producing.
+    """
+    from shave import archetype
+
+    assert not hasattr(archetype, "scale_to_floor_area"), (
+        "the asserted-intensity path is back; magnitude must come from "
+        "modeled.peak_kw_for, which derives the load factor rather than "
+        "taking one"
+    )
