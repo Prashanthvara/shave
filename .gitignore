@@ -27,3 +27,6 @@ data/interim/
 .playwright-mcp/
 .DS_Store
 .claude/settings.local.json
+
+# local-only Claude Code settings
+.claude/settings.local.json
