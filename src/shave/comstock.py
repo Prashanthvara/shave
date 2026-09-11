@@ -17,15 +17,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import duckdb
+import numpy as np
 import pandas as pd
 
+from .archetype import INTERVALS_PER_BILLED_DAY
 from .assumptions import (
     COMSTOCK_RELEASE,
     COMSTOCK_S3_BASE,
     COMSTOCK_STATE,
     COMSTOCK_UPGRADE,
     INTERVAL_MINUTES,
+    PEAK_HOUR_START,
 )
+from .billing_window import billed_mask
 
 # Worcester County, FIPS 25027, in NHGIS GISJOIN form.
 WORCESTER_COUNTY_GISJOIN = "G2500270"
@@ -150,3 +154,100 @@ def select_representative(
         cohort_size=len(ordered),
         widened=len(ordered) < min_cohort,
     )
+
+
+@dataclass(frozen=True)
+class ReducedProfile:
+    """A building's billed peak shape: twelve monthly peaks, twelve windows.
+
+    Reduces the 35,040-row raw timeseries to what the scorer actually reads --
+    about 0.2% of the input -- by masking to the billed window first (see
+    `billing_window.billed_mask`) and keeping only each month's peak value and
+    its worst billed day's 52-interval shape.
+    """
+
+    bldg_id: int
+    monthly_peak_kw: np.ndarray   # (12,)
+    windows: np.ndarray           # (12, INTERVALS_PER_BILLED_DAY)
+    sqft: float | None = None
+
+    def to_frame(self) -> pd.DataFrame:
+        return pd.DataFrame({
+            "bldg_id": np.repeat(self.bldg_id, 12),
+            "month": np.arange(1, 13),
+            "monthly_peak_kw": self.monthly_peak_kw,
+            "sqft": np.repeat(np.nan if self.sqft is None else self.sqft, 12),
+            **{f"i{i:02d}": self.windows[:, i] for i in range(INTERVALS_PER_BILLED_DAY)},
+        })
+
+    @classmethod
+    def from_frame(cls, df: pd.DataFrame) -> "ReducedProfile":
+        df = df.sort_values("month")
+        cols = [f"i{i:02d}" for i in range(INTERVALS_PER_BILLED_DAY)]
+        sqft = float(df["sqft"].iloc[0])
+        return cls(
+            bldg_id=int(df["bldg_id"].iloc[0]),
+            monthly_peak_kw=df["monthly_peak_kw"].to_numpy(dtype=float),
+            windows=df[cols].to_numpy(dtype=float),
+            sqft=None if np.isnan(sqft) else sqft,
+        )
+
+
+def reduce_from_frame(
+    bldg_id: int, raw: pd.DataFrame, sqft: float | None = None
+) -> ReducedProfile:
+    """Twelve monthly peaks and twelve peak-day windows, billed intervals only."""
+    ts = pd.DatetimeIndex(raw["timestamp"])
+    kw = raw[TOTAL_ELECTRICITY_COL].to_numpy(dtype=float) * KWH_PER_INTERVAL_TO_KW
+
+    keep = billed_mask(ts)
+    ts, kw = ts[keep], kw[keep]
+
+    month = ts.month.to_numpy()
+    day = ts.normalize().to_numpy(dtype="datetime64[s]")
+
+    # Position within the billed window, derived so the window length is never
+    # assumed. billing_window guarantees these are all inside the peak period.
+    slot = ((ts.hour.to_numpy() - PEAK_HOUR_START) * 60
+            + ts.minute.to_numpy()) // INTERVAL_MINUTES
+
+    peaks = np.zeros(12)
+    windows = np.zeros((12, INTERVALS_PER_BILLED_DAY))
+
+    for m in range(1, 13):
+        sel = month == m
+        if not sel.any():
+            raise ComStockError(f"building {bldg_id}: no billed intervals in month {m}")
+        m_kw, m_day, m_slot = kw[sel], day[sel], slot[sel]
+        peaks[m - 1] = m_kw.max()
+
+        # The day whose own maximum is highest is that month's peak day.
+        days, inverse = np.unique(m_day, return_inverse=True)
+        per_day_max = np.zeros(len(days))
+        np.maximum.at(per_day_max, inverse, m_kw)
+        worst = inverse == int(per_day_max.argmax())
+        windows[m - 1, m_slot[worst]] = m_kw[worst]
+
+    return ReducedProfile(int(bldg_id), peaks, windows, sqft)
+
+
+def reduce_timeseries(
+    bldg_id: int,
+    conn: duckdb.DuckDBPyConnection | None = None,
+    sqft: float | None = None,
+) -> ReducedProfile:
+    """Read one building's timeseries from S3 and reduce it."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        raw = conn.execute(
+            f'''SELECT timestamp, "{TOTAL_ELECTRICITY_COL}"
+                FROM read_parquet('{timeseries_path(bldg_id)}')
+                ORDER BY timestamp'''
+        ).fetchdf()
+    finally:
+        if own:
+            conn.close()
+    if raw.empty:
+        raise ComStockError(f"building {bldg_id}: timeseries is empty")
+    return reduce_from_frame(bldg_id, raw, sqft)

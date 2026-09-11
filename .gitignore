@@ -20,6 +20,7 @@ data/interim/
 *.gdb/
 *.gpkg
 *.parquet
+!tests/fixtures/*.parquet
 *.zip
 
 # tooling noise
