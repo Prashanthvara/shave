@@ -72,3 +72,51 @@ def test_coordinates_are_rounded_so_the_payload_stays_small():
         for part in token.split(","):
             _, _, decimals = part.partition(".")
             assert len(decimals) <= 1, f"{part} carries more precision than 0.1 units"
+
+
+def test_a_tiny_parcel_is_grown_to_a_legible_minimum():
+    """Parcel area is an accidental third encoding. Measured on Worcester it
+    correlated with floor area, so the map said 'big is good' twice over --
+    large parcels were both darker and physically larger, and 74 of the 172
+    sweet-spot sites rendered under 4 units across. Growing the small ones
+    about their own centroid stops area encoding anything."""
+    tiny = Polygon([(-71.8000, 42.3000), (-71.7999, 42.3000),
+                    (-71.7999, 42.3001), (-71.8000, 42.3001)])
+    frame = _frame()
+
+    raw = mapgeo.path_for(tiny, frame, min_span=0.0)
+    grown = mapgeo.path_for(tiny, frame, min_span=mapgeo.MIN_SPAN_UNITS)
+
+    def span(d):
+        import re
+        n = [float(x) for x in re.findall(r"-?\d+\.?\d*", d)]
+        xs, ys = n[0::2], n[1::2]
+        return max(max(xs) - min(xs), max(ys) - min(ys))
+
+    assert span(raw) < mapgeo.MIN_SPAN_UNITS
+    assert span(grown) == pytest.approx(mapgeo.MIN_SPAN_UNITS, rel=0.02)
+
+
+def test_growing_keeps_the_parcel_where_it_is():
+    """A parcel moved to make it visible would be a lie about its location."""
+    tiny = Polygon([(-71.8000, 42.3000), (-71.7999, 42.3000),
+                    (-71.7999, 42.3001), (-71.8000, 42.3001)])
+    frame = _frame()
+
+    def centre(d):
+        import re
+        n = [float(x) for x in re.findall(r"-?\d+\.?\d*", d)]
+        xs, ys = n[0::2], n[1::2]
+        return (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
+
+    cx0, cy0 = centre(mapgeo.path_for(tiny, frame, min_span=0.0))
+    cx1, cy1 = centre(mapgeo.path_for(tiny, frame, min_span=mapgeo.MIN_SPAN_UNITS))
+    assert cx1 == pytest.approx(cx0, abs=0.2)
+    assert cy1 == pytest.approx(cy0, abs=0.2)
+
+
+def test_a_parcel_already_large_enough_is_left_alone():
+    big = Polygon([(-71.80, 42.30), (-71.78, 42.30), (-71.78, 42.32), (-71.80, 42.32)])
+    frame = _frame()
+    assert mapgeo.path_for(big, frame, min_span=mapgeo.MIN_SPAN_UNITS) == \
+           mapgeo.path_for(big, frame, min_span=0.0)

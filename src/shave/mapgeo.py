@@ -26,6 +26,17 @@ SIMPLIFY_TOLERANCE_DEG = 0.00002
 #: Worcester comes out portrait at 818.
 VIEW_WIDTH = 620
 
+#: Smallest span, in SVG units, at which a parcel is legible and clickable.
+#: Parcel AREA is an accidental third encoding that DESIGN.md never specified,
+#: and on Worcester it correlates with floor area: the map said "big is good"
+#: twice over, since large parcels were both darker (more dollars, more fill
+#: opacity) and physically larger. Measured before this was added: the median
+#: parcel spanned 6.3 units of 620, sweet-spot parcels 4.3 against 7.8 for
+#: everything else, and 74 of the 172 sweet-spot sites rendered under 4 units.
+#: Growing the small ones about their own centroid stops area encoding
+#: anything, so only the two designed channels speak. The legend discloses it.
+MIN_SPAN_UNITS = 9.0
+
 #: Coordinates are rounded to this many decimals. At 620 units across a
 #: 0.13 degree span, 0.1 of a unit is under two metres.
 COORD_DECIMALS = 1
@@ -86,17 +97,35 @@ def project(lon: float, lat: float, frame: MapFrame) -> tuple[float, float]:
     return fx * frame.width, fy * frame.height
 
 
-def _ring(coords, frame: MapFrame) -> str:
-    points = []
-    for lon, lat in coords:
-        x, y = project(lon, lat, frame)
-        points.append(f"{round(x, COORD_DECIMALS)},{round(y, COORD_DECIMALS)}")
+def _ring(coords, frame: MapFrame, min_span: float) -> str:
+    projected = [project(lon, lat, frame) for lon, lat in coords]
+    projected = _grown(projected, min_span)
+    points = [f"{round(x, COORD_DECIMALS)},{round(y, COORD_DECIMALS)}" for x, y in projected]
     if not points:
         return ""
     return "M" + points[0] + "".join("L" + p for p in points[1:]) + "Z"
 
 
-def path_for(geom, frame: MapFrame) -> str:
+def _grown(points: list[tuple[float, float]], min_span: float) -> list[tuple[float, float]]:
+    """Scale a projected ring about its own centre up to `min_span`.
+
+    Position is preserved exactly -- a parcel moved to make it visible would
+    be a lie about where it is. Only its drawn size changes.
+    """
+    if min_span <= 0 or not points:
+        return points
+    xs = [x for x, _ in points]
+    ys = [y for _, y in points]
+    span = max(max(xs) - min(xs), max(ys) - min(ys))
+    if span >= min_span or span <= 0:
+        return points
+    scale = min_span / span
+    cx = (max(xs) + min(xs)) / 2.0
+    cy = (max(ys) + min(ys)) / 2.0
+    return [(cx + (x - cx) * scale, cy + (y - cy) * scale) for x, y in points]
+
+
+def path_for(geom, frame: MapFrame, min_span: float = MIN_SPAN_UNITS) -> str:
     """One SVG `d` string for a polygon or multipolygon, exteriors only.
 
     Returns "" for null or empty geometry rather than raising: a parcel with
@@ -115,7 +144,9 @@ def path_for(geom, frame: MapFrame) -> str:
         parts = list(simple.geoms)
     else:
         return ""
-    return "".join(_ring(p.exterior.coords, frame) for p in parts if not p.is_empty)
+    return "".join(
+        _ring(p.exterior.coords, frame, min_span) for p in parts if not p.is_empty
+    )
 
 
 def paths_for(gdf, frame: MapFrame) -> dict[str, str]:

@@ -30,7 +30,7 @@ SITE_SCHEMA_VERSION = "1.0.0"
 
 #: What this module adds on top of an exported row.
 ADDED_ROW_FIELDS: tuple[str, ...] = (
-    "occupant", "occupant_source", "window_kw", "shaveable_kw",
+    "occupant", "occupant_source", "window_kw", "shaveable_kw", "path",
 )
 
 #: What the page reads off every row. Everything but ADDED_ROW_FIELDS comes
@@ -58,7 +58,12 @@ def window_series(row: Mapping) -> list[float]:
     return [round(v / top, 4) for v in values]
 
 
-def enrich(export_payload: dict, scored: pd.DataFrame) -> dict:
+def enrich(
+    export_payload: dict,
+    scored: pd.DataFrame,
+    paths: dict[str, str] | None = None,
+    view_box: str | None = None,
+) -> dict:
     """The export, plus the occupant, the sparkline series and the method.
 
     Does not mutate its argument: the caller may still want to write the raw
@@ -78,7 +83,12 @@ def enrich(export_payload: dict, scored: pd.DataFrame) -> dict:
             row["shaveable_kw"] = max(
                 float(v) for v in row["monthly_shaveable_kw"]
             )
+            # Empty string, not a missing key: a parcel with no polygon still
+            # belongs in the table, and the page checks truthiness once.
+            row["path"] = (paths or {}).get(row["loc_id"], "")
 
+    if view_box:
+        payload["map"] = {"view_box": view_box}
     payload["site_schema_version"] = SITE_SCHEMA_VERSION
     # The export already ran the regression and carries it. Passing it through
     # rather than dropping it is the difference between a method page that
