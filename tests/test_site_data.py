@@ -1,18 +1,11 @@
 """What the page reads, adapted from the one export contract."""
 
 import json
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from shave import site_data
-
-WORCESTER_DIR = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
-needs_worcester = pytest.mark.skipif(
-    not Path(WORCESTER_DIR + "/M348TaxPar_CY26_FY26.shp").exists(),
-    reason="Worcester L3 extract not present (data/raw is gitignored)",
-)
 
 
 def _scored_stub(loc_id="L1"):
@@ -102,17 +95,16 @@ def test_enrich_does_not_mutate_the_export_it_was_given():
     assert json.dumps(payload, sort_keys=True) == before
 
 
-@needs_worcester
-def test_every_field_the_page_reads_is_present_on_every_row():
+def test_every_field_the_page_reads_is_present_on_every_row(
+    worcester_parcels, worcester_scored
+):
     """The consumer contract. A rename in the pipeline or the export must
     break the build, not the browser."""
-    from shave import export, ingest, pipeline
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
-    raw = export.build_export(scored, parcels,
+    raw = export.build_export(worcester_scored, worcester_parcels,
                               town={"name": "Worcester", "town_id": 348}, top_n=25)
-    enriched = site_data.enrich(raw, scored)
+    enriched = site_data.enrich(raw, worcester_scored)
 
     for name, rows in enriched["lists"].items():
         assert rows, f"the {name} list is empty"
@@ -121,32 +113,32 @@ def test_every_field_the_page_reads_is_present_on_every_row():
             assert not missing, f"{name} row {row['loc_id']} missing {sorted(missing)}"
 
 
-@needs_worcester
-def test_the_payload_is_json_serialisable_and_small_enough_to_serve():
-    from shave import export, ingest, pipeline
+def test_the_payload_is_json_serialisable_and_small_enough_to_serve(
+    worcester_parcels, worcester_scored
+):
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
     enriched = site_data.enrich(
-        export.build_export(scored, parcels,
-                            town={"name": "Worcester", "town_id": 348}), scored)
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
 
     blob = json.dumps(enriched, separators=(",", ":"))
     assert len(blob.encode("utf-8")) < export.MAX_BYTES
 
 
-@needs_worcester
-def test_the_top_row_of_each_list_carries_a_named_occupant_and_its_reason():
+def test_the_top_row_of_each_list_carries_a_named_occupant_and_its_reason(
+    worcester_parcels, worcester_scored
+):
     """Success criterion 2, at the point the page reads it, on BOTH lists --
     because the lists are never merged, each one's head is a first row that
     someone will read first."""
-    from shave import export, ingest, pipeline
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
     enriched = site_data.enrich(
-        export.build_export(scored, parcels,
-                            town={"name": "Worcester", "town_id": 348}), scored)
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
 
     for name, rows in enriched["lists"].items():
         top = rows[0]
@@ -156,15 +148,15 @@ def test_the_top_row_of_each_list_carries_a_named_occupant_and_its_reason():
         assert top["occupant_source"].startswith("http"), name
 
 
-@needs_worcester
-def test_each_list_is_ranked_by_dollars_within_itself():
-    from shave import export, ingest, pipeline
+def test_each_list_is_ranked_by_dollars_within_itself(
+    worcester_parcels, worcester_scored
+):
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
     enriched = site_data.enrich(
-        export.build_export(scored, parcels,
-                            town={"name": "Worcester", "town_id": 348}), scored)
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
 
     for rows in enriched["lists"].values():
         usd = [r["annual_savings_usd"] for r in rows]
@@ -172,18 +164,16 @@ def test_each_list_is_ranked_by_dollars_within_itself():
         assert [r["rank"] for r in rows] == list(range(1, len(rows) + 1))
 
 
-@needs_worcester
-def test_every_exported_row_carries_a_map_path():
+def test_every_exported_row_carries_a_map_path(worcester_parcels, worcester_scored):
     """One Worcester parcel has no geometry and must still be exported, with
     an empty path rather than a missing key."""
-    from shave import export, ingest, mapgeo, pipeline
+    from shave import export, mapgeo
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
-    frame = mapgeo.frame_for(parcels)
-    raw = export.build_export(scored, parcels,
+    frame = mapgeo.frame_for(worcester_parcels)
+    raw = export.build_export(worcester_scored, worcester_parcels,
                               town={"name": "Worcester", "town_id": 348}, top_n=25)
-    enriched = site_data.enrich(raw, scored, paths=mapgeo.paths_for(parcels, frame),
+    enriched = site_data.enrich(raw, worcester_scored,
+                                paths=mapgeo.paths_for(worcester_parcels, frame),
                                 view_box=frame.view_box)
 
     assert enriched["map"]["view_box"].startswith("0 0 620 ")
