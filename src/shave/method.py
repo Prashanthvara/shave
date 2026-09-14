@@ -155,10 +155,13 @@ LIMITATIONS: tuple[Limitation, ...] = (
 #: them, and a reader who finds an unnamed gap stops trusting the named ones.
 KNOWN_GAPS: tuple[Limitation, ...] = (
     Limitation(
-        "no_siting_screen",
-        "No siting screen has been run. Whether a site has an unobstructed "
-        "wall run long enough for two cabinets is not checked, so nothing here "
-        "screens out zero-lot-line or fully-built parcels.",
+        "map_shows_no_siting",
+        "The map draws the assessor's parcel outline and nothing else. A shape "
+        "on it means a parcel was scored, not that a cabinet will fit: no "
+        "siting screen has been run, so the longest unobstructed wall run is "
+        "not computed and nothing here rules out a zero-lot-line or fully "
+        "built parcel. It also cannot see loading docks, fire lanes, egress or "
+        "where the service entrance is.",
     ),
     Limitation(
         "no_class_shape_check",

@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-from shave import export, ingest, pipeline, regression, site_data
+from shave import export, ingest, mapgeo, pipeline, regression, site_data
 
 WORCESTER = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
 
@@ -50,7 +50,10 @@ def main() -> int:
 
     raw = export.build_export(scored, parcels, town=town, top_n=args.top_n)
     raw["regression"] = regression.run(scored)
-    enriched = site_data.enrich(raw, scored)
+    frame = mapgeo.frame_for(parcels)
+    enriched = site_data.enrich(
+        raw, scored, paths=mapgeo.paths_for(parcels, frame), view_box=frame.view_box
+    )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

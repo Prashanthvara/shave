@@ -223,3 +223,96 @@ describe("methodHTML", () => {
     expect(foot).toContain("4 of 50");
   });
 });
+
+import { mapSVG, parcelHTML } from "../public/app.js";
+
+const MAP_ROWS = [
+  { ...ROW, loc_id: "A", annual_savings_usd: 30000, rate_class: "G-3",
+    path: "M10,10L20,10L20,20L10,20Z", occupant: "Big Slate Co" },
+  { ...ROW, loc_id: "B", annual_savings_usd: 6000, rate_class: "G-2",
+    path: "M40,40L45,40L45,45L40,45Z", occupant: "Small Teal Co" },
+  { ...ROW, loc_id: "C", annual_savings_usd: 1000, rate_class: "G-2", path: "" },
+];
+
+describe("parcelHTML", () => {
+  it("encodes rate class in the outline and never in the accent", () => {
+    const a = parcelHTML(MAP_ROWS[0], 30000);
+    const b = parcelHTML(MAP_ROWS[1], 30000);
+    expect(a).toContain("var(--g3)");
+    expect(b).toContain("var(--g2)");
+    // the accent is reserved for fill weight; an outline must never take it
+    expect(a).not.toMatch(/stroke="var\(--signal\)"/);
+  });
+
+  it("encodes saving as fill opacity, heavier for more money", () => {
+    const rich = parcelHTML(MAP_ROWS[0], 30000);
+    const poor = parcelHTML(MAP_ROWS[1], 30000);
+    const op = (s) => parseFloat(s.match(/fill-opacity="([\d.]+)"/)[1]);
+    expect(op(rich)).toBeGreaterThan(op(poor));
+    expect(op(poor)).toBeGreaterThan(0);
+  });
+
+  it("is keyboard reachable and labelled for a screen reader", () => {
+    const html = parcelHTML(MAP_ROWS[0], 30000);
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('role="button"');
+    expect(html).toMatch(/aria-label="[^"]*Big Slate Co[^"]*"/);
+  });
+
+  it("escapes the label, which came from an assessor record", () => {
+    const html = parcelHTML({ ...MAP_ROWS[0], occupant: '"><script>x' }, 30000);
+    expect(html).not.toContain("<script>");
+  });
+});
+
+describe("mapSVG", () => {
+  it("draws only the rows that have geometry", () => {
+    const svg = mapSVG(MAP_ROWS, "0 0 620 818", 30000);
+    expect(svg.match(/class="parcel"/g)).toHaveLength(2);
+    expect(svg).not.toContain('data-id="C"');
+  });
+
+  it("carries the build's viewBox rather than inventing one", () => {
+    expect(mapSVG(MAP_ROWS, "0 0 620 818", 30000)).toContain('viewBox="0 0 620 818"');
+  });
+
+  it("says so plainly when there is nothing to draw", () => {
+    const svg = mapSVG([MAP_ROWS[2]], "0 0 620 818", 1000);
+    expect(svg).toMatch(/no mapped parcel|nothing to draw/i);
+  });
+});
+
+import { parcelSelectionClasses } from "../public/app.js";
+
+describe("parcelSelectionClasses", () => {
+  const rows = [
+    { loc_id: "A", path: "M0,0L1,1Z" },
+    { loc_id: "B", path: "M0,0L1,1Z" },
+    { loc_id: "C", path: "" },
+  ];
+
+  it("highlights the selected parcel and dims the others", () => {
+    const cls = parcelSelectionClasses(rows, "A");
+    expect(cls.A).toContain("on");
+    expect(cls.A).not.toContain("dim");
+    expect(cls.B).toContain("dim");
+  });
+
+  it("dims nothing when there is no selection", () => {
+    const cls = parcelSelectionClasses(rows, null);
+    expect(cls.A).not.toContain("dim");
+    expect(cls.B).not.toContain("dim");
+  });
+
+  it("ignores rows with no geometry", () => {
+    expect(parcelSelectionClasses(rows, "A")).not.toHaveProperty("C");
+  });
+
+  it("dims everything when the selection is not on the map", () => {
+    // The selected row exists in the table but has no parcel: the map must
+    // not silently keep a stale highlight on a different building.
+    const cls = parcelSelectionClasses(rows, "C");
+    expect(cls.A).toContain("dim");
+    expect(cls.B).toContain("dim");
+  });
+});

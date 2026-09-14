@@ -120,3 +120,14 @@ def test_the_unbilled_overnight_limitation_is_stated():
     text = stated["recharge_is_unconstrained_service_capacity_is_not_checked"]
     assert "never billed" in text
     assert "service capacity" in text
+
+
+def test_the_method_page_says_what_the_map_cannot_show():
+    """The map draws parcel outlines. A reader will reasonably assume a shape
+    on a map means a site was assessed for fit; nothing here checks that."""
+    stated = {g.key: g.statement for g in method.KNOWN_GAPS}
+    assert "map_shows_no_siting" in stated, sorted(stated)
+    assert "no_siting_screen" not in stated, "the two would say overlapping things"
+    text = stated["map_shows_no_siting"].lower()
+    assert "wall" in text
+    assert "outline" in text

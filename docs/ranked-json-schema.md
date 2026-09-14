@@ -3,7 +3,7 @@
 This document and `export.SCHEMA_VERSION` change together. It is the only interface between
 the Python pipeline and anything that renders it.
 
-**Current version: `1.2.0`**
+**Current version: `1.3.0`**
 
 ## Versioning rule
 
@@ -19,6 +19,11 @@ it draws anything.
 by dollars plus up to `SWEET_SPOT_N` sweet-spot rows, de-duplicated and still
 ordered by dollars. No field was added, removed or retyped, so a 1.1.0 consumer
 keeps working; the list is simply longer and complete for the sweet-spot view.
+
+**1.3.0** — rows gain `path`, an SVG `d` string in the coordinate space of
+`map.view_box`, empty for a parcel with no geometry. The payload gains a
+top-level `map` object carrying `view_box`. Projection and simplification
+happen at build time; the page injects the string unchanged.
 
 ## Why there are two lists and not one
 

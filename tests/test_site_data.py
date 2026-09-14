@@ -170,3 +170,28 @@ def test_each_list_is_ranked_by_dollars_within_itself():
         usd = [r["annual_savings_usd"] for r in rows]
         assert usd == sorted(usd, reverse=True)
         assert [r["rank"] for r in rows] == list(range(1, len(rows) + 1))
+
+
+@needs_worcester
+def test_every_exported_row_carries_a_map_path():
+    """One Worcester parcel has no geometry and must still be exported, with
+    an empty path rather than a missing key."""
+    from shave import export, ingest, mapgeo, pipeline
+
+    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
+    scored = pipeline.score_parcels(parcels)
+    frame = mapgeo.frame_for(parcels)
+    raw = export.build_export(scored, parcels,
+                              town={"name": "Worcester", "town_id": 348}, top_n=25)
+    enriched = site_data.enrich(raw, scored, paths=mapgeo.paths_for(parcels, frame),
+                                view_box=frame.view_box)
+
+    assert enriched["map"]["view_box"].startswith("0 0 620 ")
+    drawn = 0
+    for rows in enriched["lists"].values():
+        for row in rows:
+            assert "path" in row, f"{row['loc_id']} has no path key"
+            if row["path"]:
+                assert row["path"].startswith("M") and row["path"].endswith("Z")
+                drawn += 1
+    assert drawn > 0, "nothing would be drawn"

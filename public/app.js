@@ -227,6 +227,56 @@ export function methodHTML(payload) {
   return { prose, cannot, foot };
 }
 
+//: Fill opacity floor and ceiling. A parcel at the floor must still be
+//: visible -- an invisible row is a row the reader cannot click.
+const FILL_MIN = 0.16;
+const FILL_MAX = 0.78;
+
+export function parcelHTML(row, maxSaving) {
+  const share = maxSaving > 0 ? Number(row.annual_savings_usd) / maxSaving : 0;
+  const opacity = (FILL_MIN + (FILL_MAX - FILL_MIN) * Math.min(1, Math.max(0, share)))
+    .toFixed(3);
+  const stroke = row.rate_class === "G-2" ? "var(--g2)" : "var(--g3)";
+  return (
+    `<g class="parcel" data-id="${esc(row.loc_id)}" tabindex="0" role="button" ` +
+    `aria-label="${esc(siteName(row))}, rate ${esc(row.rate_class)}, estimated ` +
+    `saving ${fmtMoney(row.annual_savings_usd)} a year">` +
+    `<path class="pfill" d="${esc(row.path)}" fill="var(--signal)" ` +
+    `fill-opacity="${opacity}" stroke="${stroke}" stroke-width="1.1"/>` +
+    `</g>`
+  );
+}
+
+export function mapSVG(rows, viewBox, maxSaving) {
+  const drawn = (rows || []).filter((r) => r.path);
+  if (!drawn.length) {
+    return (
+      `<svg class="mapsvg" viewBox="${esc(viewBox)}" role="img" ` +
+      `aria-label="No mapped parcel in this view."></svg>` +
+      `<p class="whysplit">No mapped parcel in this view. The ranked list is ` +
+      `unaffected; only the drawing has nothing to show.</p>`
+    );
+  }
+  return (
+    `<svg class="mapsvg" viewBox="${esc(viewBox)}" role="img" ` +
+    `aria-label="Worcester parcels, shaded by estimated annual demand-charge ` +
+    `saving and outlined by rate class.">` +
+    `<g id="parcels">${drawn.map((r) => parcelHTML(r, maxSaving)).join("")}</g>` +
+    `</svg>`
+  );
+}
+
+export function parcelSelectionClasses(rows, selectedId) {
+  const drawn = (rows || []).filter((r) => r.path);
+  const out = {};
+  const anySelected = selectedId != null;
+  for (const row of drawn) {
+    const on = row.loc_id === selectedId;
+    out[row.loc_id] = on ? "parcel on" : anySelected ? "parcel dim" : "parcel";
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // wiring. Everything above is pure and tested; everything below touches the DOM.
 // ---------------------------------------------------------------------------
@@ -242,6 +292,7 @@ const state = {
   selected: null,
   source: "comstock",
   view: "all",
+  viewBox: "0 0 620 818",
 };
 
 const WHY_SPLIT =
@@ -263,9 +314,19 @@ function select(id) {
   const tr = $(`#rows tr[data-id="${CSS.escape(id)}"]`);
   if (tr) tr.insertAdjacentHTML("afterend", reasonRowHTML(row));
   $("#drawer").innerHTML = drawerHTML(row, (state.method || {}).flag_meanings);
+
+  // The map is a view onto the table, not a picture beside it.
+  const classes = parcelSelectionClasses(state.shown, id);
+  $$("#map .parcel").forEach((g) => {
+    g.setAttribute("class", classes[g.dataset.id] || "parcel");
+  });
 }
 
 function draw() {
+  const maxSaving = state.shown.reduce(
+    (m, r) => Math.max(m, Number(r.annual_savings_usd) || 0), 0,
+  );
+  $("#map").innerHTML = mapSVG(state.shown, state.viewBox, maxSaving);
   if (state.shown.length) {
     $("#rows").innerHTML = state.shown.map(rowHTML).join("");
     select(state.shown[0].loc_id);
@@ -314,6 +375,7 @@ async function boot() {
   }
 
   state.lists = ranked.lists;
+  state.viewBox = (ranked.map || {}).view_box || "0 0 620 818";
   const c = ranked.counts;
   $("#counts").textContent =
     `${c.parcels_in.toLocaleString()} parcels screened · ` +
@@ -354,6 +416,24 @@ async function boot() {
       e.preventDefault();
       select(tr.dataset.id);
     }
+  });
+
+  $("#map").addEventListener("click", (e) => {
+    const g = e.target.closest(".parcel");
+    if (!g) return;
+    select(g.dataset.id);
+    const tr = $(`#rows tr[data-id="${CSS.escape(g.dataset.id)}"]`);
+    if (tr) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      tr.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    }
+  });
+  $("#map").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const g = e.target.closest(".parcel");
+    if (!g) return;
+    e.preventDefault();
+    select(g.dataset.id);
   });
 
   const sources = { "src-cs": "comstock", "src-md": "modeled" };
