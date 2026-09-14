@@ -3,7 +3,7 @@
 This document and `export.SCHEMA_VERSION` change together. It is the only interface between
 the Python pipeline and anything that renders it.
 
-**Current version: `1.4.0`**
+**Current version: `1.5.0`**
 
 ## Versioning rule
 
@@ -32,6 +32,17 @@ it to. The site payload additionally carries `day_kw`, `day_held` and `day_offpe
 on each row — the same day, the held level and `offpeak_max_kw` normalised to one
 shared 0–1 scale — and a top-level `day_axis` object
 `{window_start_hour, window_end_hour, step_hours}` taken from `assumptions.py`.
+MINOR: nothing was removed or retyped.
+
+**1.5.0** — rows gain the siting screen: `siting` (string, one of `clear`,
+`screened_out`, `no_roofprint`, `no_geometry`), `wall_run_ft` (float or null,
+the longest wall with the published clearance to the parcel line),
+`wall_bearing_deg` (int or null, the direction that wall faces, clockwise from
+grid north), `roofprint_count` (int) and `sqft_source` (`assessor` or
+`roofprint`). The site payload adds `wall` (an open SVG path in `map.view_box`
+space, empty when there is no run) and `wall_facing` (an eight-point compass
+label) on each row, and a top-level `siting_rule` object
+`{clearance_ft, min_wall_run_ft}`. `clear` means only "not screened out".
 MINOR: nothing was removed or retyped.
 
 ## Why there are two lists and not one

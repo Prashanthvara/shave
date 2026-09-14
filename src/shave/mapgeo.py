@@ -106,22 +106,29 @@ def _ring(coords, frame: MapFrame, min_span: float) -> str:
     return "M" + points[0] + "".join("L" + p for p in points[1:]) + "Z"
 
 
+def _growth(points: list[tuple[float, float]], min_span: float) -> tuple[float, float, float]:
+    """The centre and scale that grow a projected ring up to `min_span`.
+
+    Scale is 1.0 when the ring is already large enough. Split out from
+    `_grown` so a wall on the parcel can use exactly the same transform.
+    """
+    if min_span <= 0 or not points:
+        return 0.0, 0.0, 1.0
+    xs = [x for x, _ in points]
+    ys = [y for _, y in points]
+    span = max(max(xs) - min(xs), max(ys) - min(ys))
+    if span >= min_span or span <= 0:
+        return 0.0, 0.0, 1.0
+    return (max(xs) + min(xs)) / 2.0, (max(ys) + min(ys)) / 2.0, min_span / span
+
+
 def _grown(points: list[tuple[float, float]], min_span: float) -> list[tuple[float, float]]:
     """Scale a projected ring about its own centre up to `min_span`.
 
     Position is preserved exactly -- a parcel moved to make it visible would
     be a lie about where it is. Only its drawn size changes.
     """
-    if min_span <= 0 or not points:
-        return points
-    xs = [x for x, _ in points]
-    ys = [y for _, y in points]
-    span = max(max(xs) - min(xs), max(ys) - min(ys))
-    if span >= min_span or span <= 0:
-        return points
-    scale = min_span / span
-    cx = (max(xs) + min(xs)) / 2.0
-    cy = (max(ys) + min(ys)) / 2.0
+    cx, cy, scale = _growth(points, min_span)
     return [(cx + (x - cx) * scale, cy + (y - cy) * scale) for x, y in points]
 
 
@@ -155,6 +162,52 @@ def paths_for(gdf, frame: MapFrame) -> dict[str, str]:
     out: dict[str, str] = {}
     for loc_id, geom in zip(wgs["loc_id"], wgs.geometry):
         d = path_for(geom, frame)
+        if d:
+            out[str(loc_id)] = d
+    return out
+
+
+def wall_path_for(parcel, segment, frame: MapFrame, min_span: float = MIN_SPAN_UNITS) -> str:
+    """The clear wall run as an open SVG path, in the parcel's drawn space.
+
+    Both arguments are EPSG:4326. The parcel is simplified exactly as
+    `path_for` simplifies it, and the wall takes the growth of whichever part
+    of the parcel it lies on, so a small parcel's wall stays on its building.
+    """
+    if parcel is None or segment is None or parcel.is_empty or segment.is_empty:
+        return ""
+    simple = parcel.simplify(SIMPLIFY_TOLERANCE_DEG, preserve_topology=True)
+    if simple.is_empty:
+        simple = parcel
+    parts = [simple] if simple.geom_type == "Polygon" else list(getattr(simple, "geoms", []))
+    if not parts:
+        return ""
+    middle = segment.interpolate(0.5, normalized=True)
+    part = min(parts, key=lambda p: p.distance(middle))
+    ring = [project(lon, lat, frame) for lon, lat in part.exterior.coords]
+    cx, cy, scale = _growth(ring, min_span)
+    points = []
+    for lon, lat in segment.coords:
+        x, y = project(lon, lat, frame)
+        gx, gy = cx + (x - cx) * scale, cy + (y - cy) * scale
+        points.append(f"{round(gx, COORD_DECIMALS)},{round(gy, COORD_DECIMALS)}")
+    return "M" + points[0] + "".join("L" + p for p in points[1:])
+
+
+def walls_for(gdf, frame: MapFrame) -> dict[str, str]:
+    """`loc_id` to wall path, for every parcel whose siting screen found a run."""
+    if "wall_segment" not in gdf.columns:
+        return {}
+    has = gdf[gdf["wall_segment"].notna() & gdf.geometry.notna()]
+    if has.empty:
+        return {}
+    import geopandas as gpd  # local: mapgeo otherwise needs only shapely objects
+
+    parcels = has.geometry.to_crs(4326)
+    segments = gpd.GeoSeries(list(has["wall_segment"]), crs=has.crs).to_crs(4326)
+    out: dict[str, str] = {}
+    for loc_id, parcel, segment in zip(has["loc_id"], parcels, segments):
+        d = wall_path_for(parcel, segment, frame)
         if d:
             out[str(loc_id)] = d
     return out

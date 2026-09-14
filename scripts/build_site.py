@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-from shave import addresses, export, ingest, mapgeo, pipeline, regression, site_data
+from shave import addresses, export, ingest, mapgeo, pipeline, regression, siting, site_data
 
 WORCESTER = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
 
@@ -31,7 +31,10 @@ def main() -> int:
     args = parser.parse_args()
 
     started = time.perf_counter()
-    parcels = ingest.load_municipality(args.dir, town_id=args.town_id)
+    parcels = ingest.load_municipality(
+        args.dir, town_id=args.town_id,
+        structures_path=siting.structures_path(args.town_id),
+    )
     scored = pipeline.score_parcels(parcels)
 
     parcels = parcels.copy()
@@ -52,7 +55,10 @@ def main() -> int:
     raw["regression"] = regression.run(scored)
     frame = mapgeo.frame_for(parcels)
     enriched = site_data.enrich(
-        raw, scored, paths=mapgeo.paths_for(parcels, frame), view_box=frame.view_box
+        raw, scored,
+        paths=mapgeo.paths_for(parcels, frame),
+        view_box=frame.view_box,
+        walls=mapgeo.walls_for(parcels, frame),
     )
 
     out = Path(args.out)
