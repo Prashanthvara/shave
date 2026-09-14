@@ -120,3 +120,63 @@ def test_a_parcel_already_large_enough_is_left_alone():
     frame = _frame()
     assert mapgeo.path_for(big, frame, min_span=mapgeo.MIN_SPAN_UNITS) == \
            mapgeo.path_for(big, frame, min_span=0.0)
+
+
+# --- the wall run, drawn with its parcel -----------------------------------
+
+import geopandas as gpd
+from shapely.geometry import LineString
+from shapely.geometry import box as _box
+
+
+def _wall_frame():
+    return mapgeo.MapFrame(
+        min_lon=-71.9, min_lat=42.2, max_lon=-71.7, max_lat=42.4,
+        width=620.0, height=818.0,
+    )
+
+
+def test_a_wall_on_a_large_parcel_is_drawn_where_it_is():
+    frame = _wall_frame()
+    parcel = _box(-71.85, 42.25, -71.75, 42.35)  # far above the minimum span
+    wall = LineString([(-71.84, 42.26), (-71.80, 42.26)])
+
+    d = mapgeo.wall_path_for(parcel, wall, frame)
+
+    x1, y1 = mapgeo.project(-71.84, 42.26, frame)
+    x2, y2 = mapgeo.project(-71.80, 42.26, frame)
+    assert d == f"M{round(x1, 1)},{round(y1, 1)}L{round(x2, 1)},{round(y2, 1)}"
+    assert "Z" not in d, "a wall is an open segment, not a closed shape"
+
+
+def test_a_wall_on_a_grown_parcel_grows_with_it():
+    """Small parcels are drawn larger about their own centre. A wall drawn at
+    its true position would float off the enlarged building."""
+    frame = _wall_frame()
+    # a few metres wide and far shorter than it is wide, so the wall along its
+    # base spans the parcel's largest dimension and grows to the full minimum
+    parcel = _box(-71.80001, 42.300000, -71.79999, 42.300001)
+    wall = LineString([(-71.80001, 42.300000), (-71.79999, 42.300000)])
+
+    d = mapgeo.wall_path_for(parcel, wall, frame)
+    coords = [tuple(map(float, p.split(","))) for p in d[1:].split("L")]
+    drawn_span = abs(coords[1][0] - coords[0][0])
+
+    assert drawn_span == pytest.approx(mapgeo.MIN_SPAN_UNITS, rel=0.05)
+
+
+def test_walls_for_skips_parcels_with_no_run():
+    gdf = gpd.GeoDataFrame(
+        {
+            "loc_id": ["A", "B"],
+            "wall_segment": [LineString([(10, 20), (40, 20)]), None],
+        },
+        geometry=[_box(0, 0, 50, 50), _box(100, 0, 150, 50)],
+        crs="EPSG:26986",
+    )
+    frame = mapgeo.frame_for(gdf)
+
+    walls = mapgeo.walls_for(gdf, frame)
+
+    assert set(walls) == {"A"}
+    assert walls["A"].startswith("M")

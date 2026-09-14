@@ -488,3 +488,64 @@ describe("lookupHTML", () => {
     expect(html).toMatch(/residential/);
   });
 });
+
+import { sitingText, wallHTML } from "../public/app.js";
+
+const RULE = { clearance_ft: 10, min_wall_run_ft: 13.1 };
+
+describe("sitingText", () => {
+  it("states a clear run with its direction and says it is not a green light", () => {
+    const text = sitingText(
+      { siting: "clear", wall_run_ft: 288.7, wall_bearing_deg: 228, wall_facing: "SW" }, RULE,
+    );
+    expect(text).toContain("289 ft");
+    expect(text).toContain("SW");
+    expect(text).toContain("228°");
+    expect(text).toContain("10 ft");
+    expect(text).toMatch(/not a green light/i);
+  });
+
+  it("states a screen-out as a finding, with the threshold it failed", () => {
+    const text = sitingText({ siting: "screened_out", wall_run_ft: 0 }, RULE);
+    expect(text).toMatch(/^Screened out/);
+    expect(text).toContain("0 ft");
+    expect(text).toContain("13.1 ft");
+  });
+
+  it("says a parcel with no roofprint was not assessed, and why", () => {
+    const text = sitingText({ siting: "no_roofprint", wall_run_ft: null }, RULE);
+    expect(text).toMatch(/^Not assessed/);
+    expect(text).toMatch(/neighbouring/);
+  });
+
+  it("never prints undefined or NaN for a row without a result", () => {
+    const text = sitingText({}, undefined);
+    expect(text).toMatch(/^Not assessed/);
+    expect(text).not.toMatch(/undefined|NaN/);
+  });
+});
+
+describe("wallHTML", () => {
+  it("draws a hidden, unclickable mark only when the row has a wall", () => {
+    const html = wallHTML({ loc_id: "A", wall: "M1,2L3,4" });
+    expect(html).toContain('class="wall"');
+    expect(html).toContain('data-id="A"');
+    expect(html).toContain('pointer-events="none"');
+    expect(html).not.toContain("var(--signal)");
+    expect(wallHTML({ loc_id: "B", wall: "" })).toBe("");
+  });
+
+  it("escapes the path it was handed", () => {
+    expect(wallHTML({ loc_id: "A", wall: '"><script>' })).not.toContain("<script>");
+  });
+});
+
+describe("drawerHTML siting", () => {
+  it("carries the siting sentence", () => {
+    const html = drawerHTML(
+      { ...ROW, siting: "screened_out", wall_run_ft: 0 }, {}, undefined, RULE,
+    );
+    expect(html).toContain("<dt>Siting</dt>");
+    expect(html).toContain("Screened out");
+  });
+});

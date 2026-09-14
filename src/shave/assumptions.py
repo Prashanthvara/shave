@@ -136,6 +136,16 @@ CABINETS_PER_SYSTEM = 2
 # deliberately conservative allowance, not a code citation.
 MIN_WALL_CLEARANCE_FT = 10.0
 
+# Linear wall two cabinets need side by side, with working separation between
+# and beside them. The design doc: "two side by side plus separation need
+# roughly 4 linear metres of wall". Four metres is 13.1 ft.
+MIN_WALL_RUN_FT = 13.1
+
+# Stories assumed when the assessor records none, for the roofprint floor-area
+# fallback only. One story understates a taller building, which is the safe
+# direction: floor area is the whole scale factor.
+DEFAULT_STORIES = 1.0
+
 # --------------------------------------------------------------------------
 # Data sources
 # --------------------------------------------------------------------------
@@ -317,6 +327,20 @@ PUBLISHED: tuple[Assumption, ...] = (
         "conservative working space",
         "NFPA 855 exposure separation is on the order of 3 ft. This is a "
         "working-space allowance, not a code citation.",
+    ),
+    Assumption(
+        "min_wall_run", MIN_WALL_RUN_FT, "ft", "ASSUMED",
+        "design doc, from the cabinet footprint",
+        "Two 39.4 in cabinets side by side plus working separation, read as "
+        "roughly four linear metres. Below this a site is screened out; above "
+        "it nothing is confirmed.",
+    ),
+    Assumption(
+        "default_stories", DEFAULT_STORIES, "stories", "ASSUMED",
+        "roofprint floor-area fallback",
+        "Used only when the assessor records neither a floor area nor a story "
+        "count. One story understates a taller building, the safe direction "
+        "for a scale factor.",
     ),
     Assumption(
         "comstock_release", COMSTOCK_RELEASE, "", "FILED",

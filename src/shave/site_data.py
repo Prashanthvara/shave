@@ -23,7 +23,12 @@ import pandas as pd
 
 from shave import method, occupants
 from shave.archetype import STEP_HOURS
-from shave.assumptions import PEAK_HOUR_END, PEAK_HOUR_START
+from shave.assumptions import (
+    MIN_WALL_CLEARANCE_FT,
+    MIN_WALL_RUN_FT,
+    PEAK_HOUR_END,
+    PEAK_HOUR_START,
+)
 
 #: Bumped when the page's contract changes. The page refuses to render a
 #: payload whose major version it does not recognise, so a stale deploy fails
@@ -33,7 +38,7 @@ SITE_SCHEMA_VERSION = "1.0.0"
 #: What this module adds on top of an exported row.
 ADDED_ROW_FIELDS: tuple[str, ...] = (
     "occupant", "occupant_source", "window_kw", "shaveable_kw", "path",
-    "day_kw", "day_held", "day_offpeak",
+    "day_kw", "day_held", "day_offpeak", "wall", "wall_facing",
 )
 
 #: What the page reads off every row. Everything but ADDED_ROW_FIELDS comes
@@ -45,6 +50,7 @@ REQUIRED_ROW_FIELDS: tuple[str, ...] = (
     "annual_savings_usd", "shaved_fraction", "confidence", "confidence_reasons",
     "flags", "sweet_spot", "site_addr", "city", "owner", "use_desc",
     "monthly_billed_demand_kw", "peak_day_month", "peak_day_held_kw",
+    "siting", "wall_run_ft", "wall_bearing_deg", "roofprint_count", "sqft_source",
 ) + ADDED_ROW_FIELDS
 
 
@@ -92,11 +98,23 @@ def day_profile(row: Mapping) -> dict:
     }
 
 
+_COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+
+def compass(bearing_deg) -> str:
+    """An eight-point label for a bearing, so the page names a direction
+    without doing arithmetic on it. "" when there is no bearing."""
+    if bearing_deg is None:
+        return ""
+    return _COMPASS[int(round(float(bearing_deg) / 45.0)) % 8]
+
+
 def enrich(
     export_payload: dict,
     scored: pd.DataFrame,
     paths: dict[str, str] | None = None,
     view_box: str | None = None,
+    walls: dict[str, str] | None = None,
 ) -> dict:
     """The export, plus the occupant, the sparkline series and the method.
 
@@ -121,6 +139,10 @@ def enrich(
             # belongs in the table, and the page checks truthiness once.
             row["path"] = (paths or {}).get(row["loc_id"], "")
             row.update(day_profile(row))
+            # Empty string, as with `path`: most rows have a wall run, and the
+            # page checks truthiness once.
+            row["wall"] = (walls or {}).get(row["loc_id"], "")
+            row["wall_facing"] = compass(row.get("wall_bearing_deg"))
 
     if view_box:
         payload["map"] = {"view_box": view_box}
@@ -130,6 +152,11 @@ def enrich(
         "window_start_hour": PEAK_HOUR_START,
         "window_end_hour": PEAK_HOUR_END,
         "step_hours": STEP_HOURS,
+    }
+    # The screen's own thresholds, so the page never restates ten feet.
+    payload["siting_rule"] = {
+        "clearance_ft": MIN_WALL_CLEARANCE_FT,
+        "min_wall_run_ft": MIN_WALL_RUN_FT,
     }
     # The export already ran the regression and carries it. Passing it through
     # rather than dropping it is the difference between a method page that

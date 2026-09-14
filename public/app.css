@@ -222,3 +222,10 @@ button.hit:hover{border-color:var(--rule-strong)}
 .parcel.dim{opacity:.22}
 .parcel.on .pfill{stroke-width:2.6}
 .legend-note{color:var(--ink-3); flex-basis:100%; font-size:11px}
+
+/* ---------- wall run ---------- */
+/* Shown for the selected parcel only. Ink, not the accent: --signal is spent. */
+.wall{visibility:hidden}
+.wall.on{visibility:visible}
+.legend .sw-wall{height:3px; vertical-align:3px; border-radius:0;
+  background:repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 4px)}

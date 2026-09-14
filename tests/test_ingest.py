@@ -845,3 +845,122 @@ def test_multi_meter_reaches_the_output_from_the_crosswalk():
     # And the predicate name must actually appear as a reason on those rows.
     assert flagged["confidence_reasons"].apply(
         lambda t: "single_meter_archetype" in t).all()
+
+
+# ---------------------------------------------------------------------------
+# roofprints: the seventh predicate and the floor-area fallback
+# ---------------------------------------------------------------------------
+
+from shave import siting
+from shave.ingest import FALLBACK_REASON
+
+
+def roofs(*geoms) -> gpd.GeoDataFrame:
+    return gpd.GeoDataFrame(
+        {"STRUCT_ID": [f"S{i}" for i in range(len(geoms))]},
+        geometry=list(geoms), crs="EPSG:26986",
+    )
+
+
+def test_exactly_one_roofprint_keeps_a_clean_parcel_high():
+    row = only(build_parcels(
+        assess(record()), taxpar("F_100000_900000"),
+        town_id=WORCESTER_TOWN_ID, structures=roofs(square(2, 2, 4)),
+    ))
+    assert row.roofprint_count == 1
+    assert row.confidence == "HIGH"
+    assert row.confidence_reasons == ()
+
+
+def test_two_roofprints_fail_single_roofprint():
+    row = only(build_parcels(
+        assess(record()), taxpar("F_100000_900000"),
+        town_id=WORCESTER_TOWN_ID, structures=roofs(square(1, 1, 2), square(6, 6, 2)),
+    ))
+    assert row.roofprint_count == 2
+    assert row.confidence == "MED"
+    assert row.confidence_reasons == ("single_roofprint",)
+
+
+def test_no_roofprint_fails_single_roofprint():
+    row = only(build_parcels(
+        assess(record()), taxpar("F_100000_900000"),
+        town_id=WORCESTER_TOWN_ID, structures=roofs(square(500, 500, 4)),
+    ))
+    assert row.roofprint_count == 0
+    assert row.siting == "no_roofprint"
+    assert row.confidence_reasons == ("single_roofprint",)
+
+
+def test_without_structures_the_roofprint_predicate_is_not_graded():
+    """Synthetic frames without a structures layer grade the other six. The
+    real pipeline always supplies one; the attrs say which happened."""
+    gdf = build_parcels(assess(record()), taxpar("F_100000_900000"), town_id=WORCESTER_TOWN_ID)
+    row = only(gdf)
+    assert gdf.attrs["roofprints_graded"] is False
+    assert pd.isna(row.roofprint_count)
+    assert row.confidence == "HIGH"
+
+
+def test_missing_floor_area_falls_back_to_roofprint_times_stories_and_drops_to_low():
+    """Spec step 2: fall back to roofprint area x estimated stories; drop to LOW."""
+    gdf = build_parcels(
+        assess(
+            record(LOC_ID="F_1_1", BLD_AREA=None, STORIES="2"),
+            record(LOC_ID="F_2_2", BLD_AREA=10_000),  # keeps 3160 in scope
+        ),
+        taxpar("F_1_1", "F_2_2"),
+        town_id=WORCESTER_TOWN_ID,
+        structures=roofs(square(1, 1, 8), square(21, 1, 8)),
+    )
+    rows = gdf.set_index("loc_id")
+
+    fallback = rows.loc["F_1_1"]
+    assert fallback.sqft == pytest.approx(64 * siting.SQFT_PER_SQM * 2, abs=0.5)
+    assert fallback.sqft_source == "roofprint"
+    assert fallback.confidence == "LOW"
+    assert "has_floor_area" in fallback.confidence_reasons
+    assert FALLBACK_REASON in fallback.confidence_reasons
+
+    recorded = rows.loc["F_2_2"]
+    assert recorded.sqft == 10_000
+    assert recorded.sqft_source == "assessor"
+    assert gdf.attrs["fallback_floor_area"] == 1
+
+
+def test_the_fallback_assumes_one_story_when_none_is_recorded():
+    gdf = build_parcels(
+        assess(
+            record(LOC_ID="F_1_1", BLD_AREA=None, STORIES=None),
+            record(LOC_ID="F_2_2", BLD_AREA=10_000),
+        ),
+        taxpar("F_1_1", "F_2_2"),
+        town_id=WORCESTER_TOWN_ID,
+        structures=roofs(square(1, 1, 8), square(21, 1, 8)),
+    )
+    row = gdf.set_index("loc_id").loc["F_1_1"]
+    assert row.sqft == pytest.approx(64 * siting.SQFT_PER_SQM * 1, abs=0.5)
+
+
+def test_the_siting_result_reaches_the_output():
+    """A 4 m roof in a 10 m parcel has 3 m either side: under ten feet, so no
+    wall clears and the parcel is screened out, stated as a finding."""
+    row = only(build_parcels(
+        assess(record()), taxpar("F_100000_900000"),
+        town_id=WORCESTER_TOWN_ID, structures=roofs(square(3, 3, 4)),
+    ))
+    assert row.siting == "screened_out"
+    assert row.wall_run_ft == 0.0
+    # None from the screen may surface as NaN after the map onto parcels
+    assert row.wall_segment is None or pd.isna(row.wall_segment)
+
+
+def test_worcester_grades_roofprints_and_screens_every_parcel(worcester_parcels):
+    gdf = worcester_parcels
+    assert gdf.attrs["roofprints_graded"] is True
+    assert gdf.attrs["fallback_floor_area"] == 0  # every mapped parcel has an area
+    assert gdf["siting"].notna().all()
+    assert set(gdf["siting"]) <= set(siting.SITING_STATUSES)
+    assert int((gdf["siting"] == "no_geometry").sum()) == 1
+    assert int((gdf["roofprint_count"] == 1).sum()) == 1541
+    assert dict(gdf["confidence"].value_counts()) == {"MED": 905, "HIGH": 605, "LOW": 589}

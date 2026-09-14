@@ -255,3 +255,50 @@ def test_every_exported_row_carries_its_worst_billed_day(
             ), f"{name} {row['loc_id']}"
             assert 0.0 <= row["day_held"] <= max(row["day_kw"]) + 1e-3
             assert max(row["day_kw"] + [row["day_offpeak"]]) == pytest.approx(1.0)
+
+
+def test_compass_labels_a_bearing_with_eight_points():
+    assert site_data.compass(0) == "N"
+    assert site_data.compass(228) == "SW"
+    assert site_data.compass(100) == "E"
+    assert site_data.compass(338) == "N"
+    assert site_data.compass(None) == ""
+
+
+def test_the_payload_carries_the_siting_rule_and_each_row_its_wall():
+    from shave.assumptions import MIN_WALL_CLEARANCE_FT, MIN_WALL_RUN_FT
+
+    payload = {"schema_version": "1.5.0", "counts": {}, "lists": {"comstock": [
+        {"loc_id": "L1", "rank": 1, "monthly_billed_demand_kw": [1.0] * 12,
+         "monthly_shaveable_kw": [1.0] * 12, "wall_bearing_deg": 228}], "modeled": []}}
+
+    out = site_data.enrich(payload, _scored_stub(), walls={"L1": "M1,2L3,4"})
+
+    row = out["lists"]["comstock"][0]
+    assert row["wall"] == "M1,2L3,4"
+    assert row["wall_facing"] == "SW"
+    assert out["siting_rule"] == {
+        "clearance_ft": MIN_WALL_CLEARANCE_FT, "min_wall_run_ft": MIN_WALL_RUN_FT,
+    }
+
+
+def test_every_exported_row_carries_its_siting_result(worcester_parcels, worcester_scored):
+    from shave import export, mapgeo, siting
+
+    frame = mapgeo.frame_for(worcester_parcels)
+    enriched = site_data.enrich(
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored, walls=mapgeo.walls_for(worcester_parcels, frame))
+
+    rows = {r["loc_id"]: r for l in enriched["lists"].values() for r in l}
+    for row in rows.values():
+        assert row["siting"] in siting.SITING_STATUSES, row["loc_id"]
+        if row["wall_run_ft"]:
+            assert row["wall"].startswith("M"), row["loc_id"]
+    walmart = rows["F_577265_2910122"]
+    assert walmart["siting"] == "clear"
+    assert walmart["wall_bearing_deg"] == 228
+    assert walmart["wall_facing"] == "SW"
+    screened = [r for r in rows.values() if r["siting"] == "screened_out"]
+    assert 1 <= len(screened) <= 20
