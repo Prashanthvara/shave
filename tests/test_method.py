@@ -122,15 +122,17 @@ def test_the_unbilled_overnight_limitation_is_stated():
     assert "service capacity" in text
 
 
-def test_the_method_page_says_what_the_map_cannot_show():
-    """The map draws parcel outlines. A reader will reasonably assume a shape
-    on a map means a site was assessed for fit; nothing here checks that."""
-    stated = {g.key: g.statement for g in method.KNOWN_GAPS}
-    assert "map_shows_no_siting" in stated, sorted(stated)
-    assert "no_siting_screen" not in stated, "the two would say overlapping things"
-    text = stated["map_shows_no_siting"].lower()
-    assert "wall" in text
-    assert "outline" in text
+def test_the_method_page_says_what_the_siting_screen_cannot_see():
+    """The spec: 'State on the method page what this cannot see.' The gap that
+    said no screen had been run is retired now that one has."""
+    gaps = {g.key for g in method.KNOWN_GAPS}
+    assert "map_shows_no_siting" not in gaps
+    stated = {l.key: l.statement for l in method.LIMITATIONS}
+    assert "siting_screens_out_only" in stated, sorted(stated)
+    text = stated["siting_screens_out_only"].lower()
+    for blind_spot in ("loading dock", "fire lane", "egress", "setback", "service entrance"):
+        assert blind_spot in text, blind_spot
+    assert "not a green light" in text or "does not confirm" in text
 
 
 def test_the_method_page_says_the_day_chart_is_one_day_and_blind_overnight():

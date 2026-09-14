@@ -164,21 +164,21 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "address in a town not yet processed returns no match -- which means "
         "not screened, not screened out.",
     ),
+    Limitation(
+        "siting_screens_out_only",
+        "The siting screen screens out the impossible and does not confirm the "
+        "possible. It measures the longest wall with ten feet of clearance to "
+        "the parcel line on MassGIS roof outlines, which include overhangs. It "
+        "cannot see loading docks, fire lanes, parking aisles, means of egress, "
+        "wall openings, local zoning setbacks or where the service entrance is. "
+        "A clear result is not a green light.",
+    ),
 )
 
 
 #: Gaps that are real and unbuilt. Naming them is cheaper than being caught by
 #: them, and a reader who finds an unnamed gap stops trusting the named ones.
 KNOWN_GAPS: tuple[Limitation, ...] = (
-    Limitation(
-        "map_shows_no_siting",
-        "The map draws the assessor's parcel outline and nothing else. A shape "
-        "on it means a parcel was scored, not that a cabinet will fit: no "
-        "siting screen has been run, so the longest unobstructed wall run is "
-        "not computed and nothing here rules out a zero-lot-line or fully "
-        "built parcel. It also cannot see loading docks, fire lanes, egress or "
-        "where the service entrance is.",
-    ),
     Limitation(
         "no_class_shape_check",
         "The bottom-up aggregate has not been compared against National Grid's "

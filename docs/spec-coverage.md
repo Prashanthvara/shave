@@ -9,9 +9,9 @@ Live: **https://shave.pjayav.workers.dev** · Repo: **https://github.com/Prashan
 |---|---|
 | Commits | 40 |
 | Source | 5,045 lines across 11 modules, plus `app.js` / `app.css` |
-| Tests | **992 Python** (4 network-marked, deselected) + **50 render** |
+| Tests | **1016 Python** (4 network-marked, deselected) + **57 render** |
 | Live response | index + `ranked.json` in **0.21 s** |
-| Coverage of spec stages | **9 of 12 numbered steps complete**, 2 partial |
+| Coverage of spec stages | **8 of 12 numbered steps complete**, 1 partial, 1 blocked |
 | Success criteria | **6 of 7** |
 
 > The Python suite scores Worcester once per session (`tests/conftest.py`). It used to re-run the 2,099-parcel pipeline in seven separate tests.
@@ -29,25 +29,25 @@ and browsable, which is success criterion 5.
 
 ---
 
-## Stage 1 — 7 of 9 complete, 2 partial
+## Stage 1 — 7 of 9 complete, 1 partial, 1 blocked
 
 | # | Spec step | State | Notes |
 |---|---|---|---|
 | 1 | MassGIS L3, `TaxPar`+`Assess` joined on `LOC_ID` one-to-many, collapse rule | ✅ | 2,099 scoreable Worcester parcels from 47,675 assessor records. **1 town of 3.** |
-| 2 | `BLDG_AREA` null/zero handling; fall back to roofprint × stories; drop to LOW | ⚠️ **partial** | Nulls are detected, graded and carried as `no_floor_area`. The **roofprint fallback is not built** — it depends on step 3. Affects exactly 1 Worcester parcel today; matters more when other towns land. |
-| 3 | `STRUCTURES_POLY` join: roofprint count, footprint area, siting geometry | ❌ | Nothing built. Blocks step 2's fallback and the siting screen. |
+| 2 | `BLDG_AREA` null/zero handling; fall back to roofprint × stories; drop to LOW | ✅ | Missing floor area falls back to roofprint area × recorded stories (one when none is recorded) and drops to LOW with reason floor_area_from_roofprint. No Worcester parcel with a polygon needs it today; the test pins that at zero. |
+| 3 | `STRUCTURES_POLY` join: roofprint count, footprint area, siting geometry | ✅ | MassGIS STRUCTURES_POLY joined by representative point: 1,541 of 2,098 mapped parcels hold one roofprint, 370 several, 187 none. Feeds the single_roofprint predicate (exported HIGH 121 → 87) and the siting screen. |
 | 4 | Archetype library; pin release, upgrade, weather year; individual buildings not aggregates | ✅ | `comstock_amy2018_release_2`, `upgrade=0`, `timeseries_individual_buildings`. 13 archetypes cached. ComStock `sqft` vs `BLDG_AREA` mismatch documented in `comstock.py`. |
-| 5 | Scoring: monthly loop, root-find, band filter, confidence tiers | ✅ | 737 kept, 172 sweet spot. Six confidence predicates. |
+| 5 | Scoring: monthly loop, root-find, band filter, confidence tiers | ✅ | 737 kept, 172 sweet spot. Seven confidence predicates. |
 | 6 | MECOLS calibration check vs published G-2/G-3 class shapes | ❌ **blocked** | `MECOLS.xlsx` is **not on disk**, despite the spec recording it as "already downloaded, 910 KB". Named as a known gap on the method page rather than quietly dropped. |
 | 7 | **Occupant resolution, top 50** — *"this is the demo; it does not get cut"* | ⚠️ **4 of 50** | Both ranked-list heads are resolved, so criterion 2 holds. The method page reports the real figure, not the target. |
 | 8 | The regression | ✅ | See criterion 3 below. |
-| 9 | Static site: ranked table → detail drawer → method page | ✅ | Ranked table → drawer (24-hour worst billed day with the billed window shaded, source label, confidence tier and failed predicates, lineage) → method page. The siting slot waits on step 3. |
+| 9 | Static site: ranked table → detail drawer → method page | ✅ | Ranked table → drawer (24-hour worst billed day with the billed window shaded, source label, confidence tier and failed predicates, lineage) → method page. Siting line: longest clear wall and bearing, or a stated screen-out. |
 
 **Additionally shipped, from the design review rather than the numbered list:**
 
 | | State |
 |---|---|
-| **D2 — the encoding map** (fill opacity = saving, outline = rate class, cross-linked both ways) | ✅ merged and live |
+| **D2 — the encoding map** (fill opacity = saving, outline = rate class, cross-linked both ways) | ✅ merged and live, with the hatched wall run on the selected parcel |
 | **D4 — the reason is inline, never behind a click** | ✅ rank 1 selected on load, reason in the first frame |
 
 ---
@@ -71,7 +71,7 @@ and browsable, which is success criterion 5.
 | 3 | Both R² figures, published with the explanation, 0.90 threshold declared in advance | ✅ | comstock **0.614 → 0.878** (n=528), modeled **0.493 → 0.749** (n=209). Both under the ceiling, so the archetype layer earns its place. |
 | 4 | MECOLS normalized-shape sanity check | ❌ | Blocked on the missing workbook. |
 | 5 | Crosswalk CSV browsable, `modeled` vs `comstock` visible per row | ✅ | |
-| 6 | Method page states what the tool cannot do | ✅ | 15 limitations including the spec's six verbatim, plus 4 named gaps. |
+| 6 | Method page states what the tool cannot do | ✅ | Limitations including the spec's six verbatim and the siting screen's blind spots, plus 3 named gaps. |
 | 7 | Stage 2: paste an address in a covered town, get a dossier | ✅ | Worcester. Exact, approximate and uncovered-town answers; every exported row is found by its own address (`test_addresses.py`). |
 
 ### A note on criterion 3
@@ -85,7 +85,7 @@ area, and a straight line cannot follow that kink.
 
 ---
 
-## The spec's test plan — 7 of 9 areas covered
+## The spec's test plan — 8 of 9 areas covered
 
 | Area | State |
 |---|---|
@@ -95,7 +95,7 @@ area, and a straight line cannot follow that kink.
 | `scorer.monthly_billed_demand` — month with zero billed days | ✅ |
 | `scorer.assign_rate_class` — 200 kW boundary **and the spec's mandatory regression** | ✅ `test_REGRESSION_rate_class_uses_12mo_average_not_annual_peak` |
 | `scorer.recharge_feasible` — "both predicates independently" | ⚠️ **deliberately superseded** — see divergences |
-| `siting` | ❌ component not built |
+| `siting` | ✅ zero-lot-line, footprint ≈ parcel, collinear merge, obstruction, straddling roof, real top-ranked sites (test_siting.py) |
 | `export` — schema version present, payload under the cap | ✅ 11 tests |
 | Worker E2E — cold load < 3 s; Supabase paused → static fallback; address outside covered towns; malformed export | ⚠️ cold load verified by hand, not automated. One path is moot (no Supabase). The address box's outside-covered-towns path is tested in render.test.js. The malformed-export path exists in `app.js` as a major-version refusal but has no test. |
 
@@ -110,9 +110,8 @@ Per-file test counts: `ingest` 62, `crosswalk` 46, `scorer` 41, `comstock` 35, `
 | # | Item | Est. | Why this order |
 |---|---|---|---|
 | 1 | **Occupant resolution, 46 remaining** | 3h, human | Spec calls it non-deferrable. `/tmp/worksheet.csv` carries them with addresses and dollar values; the ratchet in `tests/test_occupants.py` rises as they land. |
-| 2 | **`STRUCTURES_POLY` + siting screen** | 4.5h | Unblocks step 2's roofprint fallback, fills the drawer's empty slot, and adds the hatched wall run the map legend deliberately omits. |
-| 3 | **New Bedford and Chicopee** | 2h | Each needs an L3 download, a crosswalk pass, and its own `county_gisjoin` (Bristol, Hampden). The municipality control is built for them. |
-| 4 | **MECOLS check** | 1h + fetch | Criterion 4. Re-fetch the workbook first. |
+| 2 | **New Bedford and Chicopee** | 2.5h | Each needs an L3 download, a crosswalk pass, its own `county_gisjoin` (Bristol, Hampden), and `scripts/fetch_structures.py --town-id`. The municipality control is built for them. |
+| 3 | **MECOLS check** | 1h + fetch | Criterion 4. Re-fetch the workbook first. |
 
 ---
 
@@ -162,6 +161,17 @@ the month's overnight maximum, not the overnight shape, and re-reading 13 timese
 for a line the tariff never bills was not worth a network dependency in the build. The chart
 draws the billed intervals as a line, the overnight maximum as a dashed line labelled unbilled,
 and the method page says so.
+
+**8. The wall run is drawn for the selected parcel only.** D2 lists a hatched wall segment
+as a map channel. At 620 SVG units across Worcester one unit is about 17 m, so the median
+exported clear run of 138 ft draws about 2.4 units long; hatching every parcel's wall at
+once is noise, not a channel. The mark appears on the selected parcel, grown with it when
+the parcel is drawn at its minimum size, and the legend says so.
+
+**9. `clear` is named for what it is.** The spec asks for the continuous fact rather than a
+boolean. The status field has four values — `clear`, `screened_out`, `no_roofprint`,
+`no_geometry` — and `clear` is defined everywhere it appears as "not screened out", never
+as suitable.
 
 ---
 
