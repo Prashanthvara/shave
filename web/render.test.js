@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   chipClass,
   daySVG,
@@ -377,5 +378,113 @@ describe("drawerHTML confidence", () => {
     expect(html).toContain('class="chip lo"');
     expect(html).toContain("within single meter cap");
     expect(html).toContain('class="billed"');
+  });
+});
+
+import { lookup, lookupHTML, parseQuery, similarity } from "../public/app.js";
+
+const ADDRESS_CASES = JSON.parse(
+  readFileSync(new URL("../tests/fixtures/address_cases.json", import.meta.url), "utf8"),
+);
+
+describe("parseQuery", () => {
+  it("parses every shared case exactly as the Python index builder does", () => {
+    for (const c of ADDRESS_CASES.cases) {
+      expect(parseQuery(c.query, ADDRESS_CASES.towns, ADDRESS_CASES.abbreviations), c.query)
+        .toEqual({ street: c.street, town: c.town });
+    }
+  });
+});
+
+describe("similarity", () => {
+  it("is 1 for identical strings and 0 for strings sharing nothing", () => {
+    expect(similarity("385 PLANTATION ST", "385 PLANTATION ST")).toBe(1);
+    expect(similarity("ABC", "XYZ")).toBe(0);
+  });
+});
+
+const INDEX = {
+  index_schema_version: "1.0.0",
+  towns: ["WORCESTER"],
+  abbreviations: ADDRESS_CASES.abbreviations,
+  statuses: {
+    ranked: "On the ranked list.",
+    below_floor: "Screened out: under the floor. That is a finding, not a missing row.",
+    no_floor_area: "No floor area.",
+  },
+  entries: [
+    { key: "385 PLANTATION ST", addr: "385 PLANTATION ST", loc_id: "F_1", status: "ranked",
+      list: "modeled", rank: 1, source: "modeled", archetype: "university", sqft: 1628495,
+      avg_12mo_kw: 3957.7, rate_class: "G-3", annual_savings_usd: 31440, confidence: "MED" },
+    { key: "70 JAMES ST", addr: "70 JAMES ST", loc_id: "F_2", status: "below_floor",
+      list: "", rank: null, source: "comstock", archetype: "warehouse", sqft: 2000,
+      avg_12mo_kw: 12, rate_class: "G-2", annual_savings_usd: 400, confidence: "HIGH" },
+    { key: "10 ELBRIDGE ST", addr: "10 ELBRIDGE ST", loc_id: "F_3", status: "no_floor_area",
+      list: "", rank: null, source: "comstock", archetype: "warehouse", sqft: null,
+      avg_12mo_kw: 0, rate_class: "G-2", annual_savings_usd: 0, confidence: "LOW" },
+  ],
+};
+
+describe("lookup", () => {
+  it("finds an exact match whatever form the address was pasted in", () => {
+    const r = lookup(INDEX, "385 Plantation Street, Worcester, MA 01605");
+    expect(r.kind).toBe("exact");
+    expect(r.matches.map((m) => m.loc_id)).toEqual(["F_1"]);
+  });
+
+  it("offers the nearest address for a typo, and calls it approximate", () => {
+    const r = lookup(INDEX, "385 Plantaton St");
+    expect(r.kind).toBe("approximate");
+    expect(r.matches[0].loc_id).toBe("F_1");
+  });
+
+  it("recognises an address in a town that is not covered", () => {
+    const r = lookup(INDEX, "12 Main St, Springfield, MA");
+    expect(r.kind).toBe("outside");
+    expect(r.town).toBe("SPRINGFIELD");
+  });
+
+  it("returns none when nothing is close", () => {
+    expect(lookup(INDEX, "9999 Nowhere Rd").kind).toBe("none");
+  });
+
+  it("does nothing for an empty query", () => {
+    expect(lookup(INDEX, "   ").kind).toBe("empty");
+  });
+});
+
+describe("lookupHTML", () => {
+  it("says an uncovered town was not screened, which differs from screened out", () => {
+    const html = lookupHTML(lookup(INDEX, "12 Main St, Springfield"), INDEX);
+    expect(html).toContain("SPRINGFIELD");
+    expect(html).toMatch(/not been screened/);
+    expect(html).toContain("WORCESTER");
+  });
+
+  it("labels fuzzy matches as approximate", () => {
+    expect(lookupHTML(lookup(INDEX, "385 Plantaton St"), INDEX)).toMatch(/approximate/i);
+  });
+
+  it("makes a ranked match a button that knows its list, and a screened-out one a statement", () => {
+    const ranked = lookupHTML(lookup(INDEX, "385 Plantation St"), INDEX);
+    expect(ranked).toMatch(/<button[^>]*class="hit"[^>]*data-id="F_1"[^>]*data-list="modeled"/);
+    expect(ranked).toContain("Rank 1");
+
+    const out = lookupHTML(lookup(INDEX, "70 James Street"), INDEX);
+    expect(out).not.toContain("<button");
+    expect(out).toContain("That is a finding, not a missing row.");
+  });
+
+  it("escapes the address, which came from an assessor record", () => {
+    const evil = { ...INDEX, entries: [{ ...INDEX.entries[1], key: "1 X ST",
+      addr: '<img src=x onerror="alert(1)">' }] };
+    const html = lookupHTML(lookup(evil, "1 X St"), evil);
+    expect(html).not.toContain("<img");
+  });
+
+  it("says what the index holds when nothing matches", () => {
+    const html = lookupHTML(lookup(INDEX, "9999 Nowhere Rd"), INDEX);
+    expect(html).toContain("3 addressed parcels");
+    expect(html).toMatch(/residential/);
   });
 });
