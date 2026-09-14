@@ -88,7 +88,76 @@ export function reasonRowHTML(row) {
   );
 }
 
-export function drawerHTML(row, flagMeanings) {
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function hh(hour) {
+  return String(hour).padStart(2, "0") + ":00";
+}
+
+// The worst billed day, on a 24-hour axis. Every value arrives normalised to
+// one shared scale by site_data.day_profile, and the tariff's hours arrive in
+// `axis`, so this only maps hours and 0-1 values to pixels. The shaved peak is
+// the load drawn a second time in --signal and clipped to the region above the
+// held line: a shape, not a subtraction.
+export function daySVG(row, axis, w, h) {
+  const a = ((row && row.day_kw) || []).map((v) => Number(v) || 0);
+  if (!a.length || !axis) {
+    return `<p class="dayempty">No day profile for this site.</p>`;
+  }
+  const pad = 1;
+  const ph = h - 14; // plot height; the bottom 14px carry the hour labels
+  const x = (hour) => (pad + (hour / 24) * (w - 2 * pad)).toFixed(1);
+  const y = (v) => (pad + (1 - v) * (ph - 2)).toFixed(1);
+
+  const start = axis.window_start_hour;
+  const end = axis.window_end_hour;
+  const step = axis.step_hours;
+  const base = (ph - pad).toFixed(1);
+  const pts = a.map((v, i) => `${x(start + i * step)},${y(v)}`);
+  const lastX = x(start + (a.length - 1) * step);
+  const area = `M${x(start)},${base} L${pts.join(" L")} L${lastX},${base} Z`;
+  const held = y(Number(row.day_held) || 0);
+  const night = y(Number(row.day_offpeak) || 0);
+
+  const month = MONTHS[(row.peak_day_month || 0) - 1] || "";
+  const peakKw = (row.monthly_billed_demand_kw || [])[(row.peak_day_month || 0) - 1];
+  const label =
+    `Worst billed day${month ? " in " + month : ""}: billed peak ` +
+    `${Math.round(Number(peakKw) || 0)} kW, held to ` +
+    `${Math.round(Number(row.peak_day_held_kw) || 0)} kW. The shaded band is the ` +
+    `billed ${hh(start)} to ${hh(end)} window; the dashed line outside it is the ` +
+    `overnight maximum, which is not billed.`;
+
+  const tick = (hour, anchor) =>
+    `<text x="${x(hour)}" y="${h - 2}" text-anchor="${anchor}" font-size="9" ` +
+    `font-family="var(--mono)" fill="var(--ink-3)">${hh(hour)}</text>`;
+
+  return (
+    `<svg class="day" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" ` +
+    `aria-label="${esc(label)}">` +
+    `<defs><clipPath id="dayshaved"><rect x="0" y="0" width="${w}" height="${held}"/></clipPath></defs>` +
+    `<rect class="billed" x="${x(start)}" y="0" ` +
+    `width="${(((end - start) / 24) * (w - 2 * pad)).toFixed(1)}" height="${ph}" ` +
+    `fill="var(--ink-2)" opacity=".05"/>` +
+    `<line x1="${x(0)}" y1="${night}" x2="${x(start)}" y2="${night}" ` +
+    `stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 2"/>` +
+    `<line x1="${x(end)}" y1="${night}" x2="${x(24)}" y2="${night}" ` +
+    `stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 2"/>` +
+    `<path d="${area}" fill="var(--ink-2)" opacity=".16"/>` +
+    `<path d="${area}" fill="var(--signal)" opacity=".55" clip-path="url(#dayshaved)"/>` +
+    `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--ink-2)" ` +
+    `stroke-width="1.1" stroke-linejoin="round"/>` +
+    `<line x1="${x(start)}" y1="${held}" x2="${lastX}" y2="${held}" ` +
+    `stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 2"/>` +
+    tick(0, "start") + tick(start, "middle") + tick(end, "middle") + tick(24, "end") +
+    `</svg>`
+  );
+}
+
+export function drawerHTML(row, flagMeanings, dayAxis) {
   const flags = (row.flags || [])
     .map(
       (f) =>
@@ -100,9 +169,15 @@ export function drawerHTML(row, flagMeanings) {
     ? ` Occupant verified at <a href="${esc(row.occupant_source)}" rel="noopener">` +
       `${esc(row.occupant_source)}</a>.`
     : " Occupant not yet resolved; the name shown is the assessor's use description.";
+  const failed = (row.confidence_reasons || []).map((r) => r.replace(/_/g, " ")).join(" · ");
+  const month = MONTHS[(row.peak_day_month || 0) - 1];
   return (
     `<div class="eyebrow">Detail &middot; ${esc(siteName(row))}</div>` +
-    `<div class="dayprofile">${sparkSVG(row.window_kw, 300, 60)}</div>` +
+    `<div class="dayprofile">${daySVG(row, dayAxis, 302, 84)}</div>` +
+    `<div class="eyebrow" style="margin-top:4px">Worst billed day` +
+    `${month ? " &middot; " + esc(month) : ""} &middot; shaded = billed window ` +
+    `&middot; accent = what the battery removes</div>` +
+    `<div class="dayprofile">${sparkSVG(row.window_kw, 302, 36)}</div>` +
     `<div class="eyebrow" style="margin-top:4px">Billed demand by month &middot; peak marked</div>` +
     `<dl class="kv">` +
     `<div><dt>Address</dt><dd>${esc(row.site_addr)}, ${esc(row.city)}</dd></div>` +
@@ -111,6 +186,8 @@ export function drawerHTML(row, flagMeanings) {
     `<div><dt>Shaveable</dt><dd>${Math.round(row.shaveable_kw)} kW</dd></div>` +
     `<div><dt>Shaved fraction</dt><dd>${(row.shaved_fraction * 100).toFixed(1)}%</dd></div>` +
     `<div><dt>Load shape</dt><dd>${esc(row.archetype)} (${esc(row.source)})</dd></div>` +
+    `<div><dt>Confidence</dt><dd><span class="chip ${chipClass(row.confidence)}">` +
+    `${esc(row.confidence)}</span>${failed ? " failed: " + esc(failed) : ""}</dd></div>` +
     flags +
     `</dl>` +
     `<div class="lineage"><strong>How we got here:</strong> use description ` +
@@ -293,6 +370,7 @@ const state = {
   source: "comstock",
   view: "all",
   viewBox: "0 0 620 818",
+  dayAxis: null,
 };
 
 const WHY_SPLIT =
@@ -313,7 +391,7 @@ function select(id) {
   if (!row) return;
   const tr = $(`#rows tr[data-id="${CSS.escape(id)}"]`);
   if (tr) tr.insertAdjacentHTML("afterend", reasonRowHTML(row));
-  $("#drawer").innerHTML = drawerHTML(row, (state.method || {}).flag_meanings);
+  $("#drawer").innerHTML = drawerHTML(row, (state.method || {}).flag_meanings, state.dayAxis);
 
   // The map is a view onto the table, not a picture beside it.
   const classes = parcelSelectionClasses(state.shown, id);
@@ -376,6 +454,7 @@ async function boot() {
 
   state.lists = ranked.lists;
   state.viewBox = (ranked.map || {}).view_box || "0 0 620 818";
+  state.dayAxis = ranked.day_axis || null;
   const c = ranked.counts;
   $("#counts").textContent =
     `${c.parcels_in.toLocaleString()} parcels screened · ` +

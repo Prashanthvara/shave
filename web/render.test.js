@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chipClass,
+  daySVG,
   drawerHTML,
   fmtMoney,
   methodHTML,
@@ -314,5 +315,67 @@ describe("parcelSelectionClasses", () => {
     const cls = parcelSelectionClasses(rows, "C");
     expect(cls.A).toContain("dim");
     expect(cls.B).toContain("dim");
+  });
+});
+
+const DAY_AXIS = { window_start_hour: 8, window_end_hour: 21, step_hours: 0.25 };
+const DAY_ROW = {
+  ...ROW,
+  peak_day_month: 7,
+  peak_day_held_kw: 150,
+  monthly_billed_demand_kw: [100, 100, 100, 100, 100, 100, 400, 100, 100, 100, 100, 100],
+  day_kw: Array.from({ length: 52 }, (_, i) => (i >= 20 && i < 24 ? 1 : 0.25)),
+  day_held: 0.375,
+  day_offpeak: 0.2,
+};
+
+describe("daySVG", () => {
+  const svg = daySVG(DAY_ROW, DAY_AXIS, 302, 84);
+
+  it("shades exactly the billed window on a 24-hour axis", () => {
+    // x(h) = 1 + h/24 * 300, so 08:00 is 101.0 and 13 hours is 162.5 wide.
+    expect(svg).toMatch(/<rect class="billed" x="101\.0" y="0" width="162\.5"/);
+  });
+
+  it("draws every billed interval and no invented overnight curve", () => {
+    const pts = svg.match(/<polyline points="([^"]+)"/)[1].trim().split(" ");
+    expect(pts).toHaveLength(52);
+    expect(svg.match(/<polyline/g)).toHaveLength(1);
+  });
+
+  it("spends the accent once, on the peak above the held level", () => {
+    expect(svg.match(/var\(--signal\)/g)).toHaveLength(1);
+    expect(svg).toContain('clip-path="url(#dayshaved)"');
+    // plot height 70, y(v) = 1 + (1 - v) * 68, so held 0.375 sits at 43.5
+    expect(svg).toContain('<clipPath id="dayshaved"><rect x="0" y="0" width="302" height="43.5"/>');
+  });
+
+  it("marks the overnight maximum on both sides of the window and says it is not billed", () => {
+    expect(svg.match(/stroke-dasharray="2 2"/g)).toHaveLength(2);
+    expect(svg).toContain("not billed");
+  });
+
+  it("names the month, the billed peak and the held level for a screen reader", () => {
+    expect(svg).toMatch(/aria-label="[^"]*July[^"]*400 kW[^"]*150 kW/);
+  });
+
+  it("says so plainly when there is no day, and never draws NaN", () => {
+    const empty = daySVG({ ...ROW, day_kw: [] }, DAY_AXIS, 302, 84);
+    expect(empty).toContain("No day profile");
+    expect(empty).not.toContain("NaN");
+    expect(daySVG(DAY_ROW, undefined, 302, 84)).toContain("No day profile");
+  });
+});
+
+describe("drawerHTML confidence", () => {
+  it("shows the confidence tier and names the predicates that failed", () => {
+    const html = drawerHTML(
+      { ...DAY_ROW, confidence: "LOW", confidence_reasons: ["within_single_meter_cap"] },
+      {},
+      DAY_AXIS,
+    );
+    expect(html).toContain('class="chip lo"');
+    expect(html).toContain("within single meter cap");
+    expect(html).toContain('class="billed"');
   });
 });
