@@ -86,8 +86,8 @@ import numpy as np
 import pandas as pd
 import pyogrio
 
-from . import crosswalk
-from .assumptions import LIKELY_SINGLE_METERED_MAX_SQFT
+from . import crosswalk, siting
+from .assumptions import DEFAULT_STORIES, LIKELY_SINGLE_METERED_MAX_SQFT
 
 __all__ = [
     "load_municipality",
@@ -122,29 +122,38 @@ NONRESIDENTIAL_CLASSES: tuple[str, ...] = ("3", "4", "9")
 # RAIL_ROW and WATER polygons exist in TaxPar and never join to Assess.
 FEE_POLY_TYPE = "FEE"
 
-# The six HIGH-confidence predicates, in report order. A parcel is HIGH only if
-# all six hold. Names are returned verbatim in `confidence_reasons` so the UI
-# can say which one failed rather than showing a bare chip.
+# The seven HIGH-confidence predicates, in report order. A parcel is HIGH only
+# if all graded predicates hold. Names are returned verbatim in
+# `confidence_reasons` so the UI can say which one failed rather than showing a
+# bare chip. `single_roofprint` is graded only when a structures layer is
+# supplied; `gdf.attrs["roofprints_graded"]` records whether it was.
 PREDICATES: tuple[str, ...] = (
     "unique_archetype",          # the use code maps 1:1 to one archetype
-    "has_floor_area",            # BLD_AREA present and non-zero
+    "has_floor_area",            # BLD_AREA present and non-zero, as the assessor recorded it
     "single_record",             # exactly one Assess record at this LOC_ID
     "single_owner",              # one owner of record
-    "within_single_meter_cap",   # BLD_AREA <= LIKELY_SINGLE_METERED_MAX_SQFT
+    "within_single_meter_cap",   # floor area <= LIKELY_SINGLE_METERED_MAX_SQFT
     "single_meter_archetype",    # the use code is not definitionally multi-tenant
+    "single_roofprint",          # exactly one roofprint on the parcel
 )
 
 # Not a predicate: a hard floor. The crosswalk marks 4000 and 4010 as COLLAPSE
 # POINTs — every manufacturer in the state carries 4000, and cold storage hides
 # inside 4010 — so those parcels are capped at LOW however well they score on
-# the five predicates.
+# the other predicates.
 COARSE_REASON = "coarse_use_code"
+
+# Also a hard floor, from the spec's step 2: a floor area estimated from the
+# roofprint rather than recorded by the assessor drops the parcel to LOW.
+FALLBACK_REASON = "floor_area_from_roofprint"
 
 OUTPUT_COLUMNS: tuple[str, ...] = (
     "loc_id", "prop_id", "use_code", "use_desc", "archetype", "source",
-    "icp_sector", "sqft", "stories", "year_built", "owner", "site_addr",
-    "city", "zip", "zoning", "assess_fy", "record_count", "owner_count",
-    "confidence", "confidence_reasons", "multi_use", "multi_meter", "geometry",
+    "icp_sector", "sqft", "sqft_source", "stories", "year_built", "owner",
+    "site_addr", "city", "zip", "zoning", "assess_fy", "record_count",
+    "owner_count", "confidence", "confidence_reasons", "multi_use", "multi_meter",
+    "roofprint_count", "roofprint_sqft", "wall_run_ft", "wall_bearing_deg",
+    "siting", "wall_segment", "geometry",
 )
 
 _FY_IN_NAME = re.compile(r"_FY(\d{2,4})", re.IGNORECASE)
@@ -279,6 +288,7 @@ def build_parcels(
     *,
     town_id: int | str | None = None,
     assess_fy_hint: int | None = None,
+    structures: gpd.GeoDataFrame | None = None,
 ) -> gpd.GeoDataFrame:
     """Collapse, classify and score-confidence a raw Assess frame.
 
@@ -394,14 +404,6 @@ def build_parcels(
         .reset_index()
     )
 
-    # Office band needs the *collapsed* area, which is why it is resolved here
-    # and not in `_crosswalk_frame`.
-    parcels["archetype"] = _resolve_office_bands(
-        parcels["archetype"].astype("string"), parcels["sqft"]
-    )
-
-    parcels = _apply_confidence(parcels)
-
     # --- assessor vintage --------------------------------------------------
     fy_column = pd.to_numeric(parcels.get("FY"), errors="coerce") if "FY" in parcels else None
     if fy_column is not None and fy_column.notna().any():
@@ -440,6 +442,47 @@ def build_parcels(
     else:
         parcels["geometry"] = None
 
+    # --- roofprints, the floor-area fallback, office band, grading ---------
+    # All of these follow the geometry join because roofprints are assigned
+    # by polygon. The office band needs the FINAL floor area and the fallback
+    # can supply one, so the band is resolved after it; grading comes last
+    # because it reads both.
+    parcels["assessor_sqft"] = pd.to_numeric(parcels["sqft"], errors="coerce")
+    roofprints_graded = structures is not None and crs is not None
+    n_fallback = 0
+    if roofprints_graded:
+        # A parcel with no polygon arrives from the merge as NaN, not None;
+        # normalise it so the GeoSeries sees a missing geometry, not a float.
+        polygons = [g if getattr(g, "geom_type", None) else None for g in parcels["geometry"]]
+        mapped = gpd.GeoDataFrame(
+            {"loc_id": parcels["LOC_ID"].astype(str).to_numpy()},
+            geometry=gpd.GeoSeries(polygons, crs=crs),
+            crs=crs,
+        )
+        sited = siting.screen(mapped, structures).set_index("loc_id")
+        for column in siting.SCREEN_COLUMNS[1:]:
+            parcels[column] = parcels["LOC_ID"].astype(str).map(sited[column]).to_numpy()
+        stories = (
+            pd.to_numeric(parcels["STORIES"], errors="coerce")
+            if "STORIES" in parcels else pd.Series(np.nan, index=parcels.index)
+        )
+        stories = stories.where(stories > 0, DEFAULT_STORIES)
+        area = parcels["assessor_sqft"]
+        roof_area = pd.to_numeric(parcels["roofprint_sqft"], errors="coerce").fillna(0.0)
+        use_roof = (area.isna() | area.le(0)) & roof_area.gt(0)
+        parcels["sqft"] = area.where(~use_roof, roof_area * stories)
+        parcels["sqft_source"] = np.where(use_roof, "roofprint", "assessor")
+        n_fallback = int(use_roof.sum())
+    else:
+        for column in siting.SCREEN_COLUMNS[1:]:
+            parcels[column] = None
+        parcels["sqft_source"] = "assessor"
+
+    parcels["archetype"] = _resolve_office_bands(
+        parcels["archetype"].astype("string"), parcels["sqft"]
+    )
+    parcels = _apply_confidence(parcels, roofprints_graded=roofprints_graded)
+
     # --- final schema ------------------------------------------------------
     out = pd.DataFrame(
         {
@@ -451,6 +494,7 @@ def build_parcels(
             "source": parcels["source"].astype("string"),
             "icp_sector": parcels["icp_sector"].astype("string"),
             "sqft": pd.to_numeric(parcels["sqft"], errors="coerce").astype("Float64"),
+            "sqft_source": parcels["sqft_source"].astype("string"),
             "stories": pd.to_numeric(
                 parcels["STORIES"], errors="coerce"
             ).astype("Float64") if "STORIES" in parcels else pd.NA,
@@ -470,6 +514,12 @@ def build_parcels(
             # The crosswalk's domain judgment, carried to the output so the row
             # detail can name it as the reason the row is not HIGH.
             "multi_meter": parcels["multi_meter"].fillna(False).astype(bool),
+            "roofprint_count": pd.to_numeric(parcels["roofprint_count"], errors="coerce").astype("Int64"),
+            "roofprint_sqft": pd.to_numeric(parcels["roofprint_sqft"], errors="coerce").astype("Float64"),
+            "wall_run_ft": pd.to_numeric(parcels["wall_run_ft"], errors="coerce").astype("Float64"),
+            "wall_bearing_deg": pd.to_numeric(parcels["wall_bearing_deg"], errors="coerce").astype("Int64"),
+            "siting": parcels["siting"].astype("string"),
+            "wall_segment": parcels["wall_segment"],
             "geometry": parcels["geometry"],
         }
     )
@@ -493,6 +543,8 @@ def build_parcels(
             "collapsed_away_records": n_collapsed_away,
             "missing_geometry": n_missing_geometry,
             "use_codes_in_scope": len(observed_codes),
+            "roofprints_graded": roofprints_graded,
+            "fallback_floor_area": n_fallback,
         }
     )
     return gdf
@@ -505,48 +557,66 @@ def _year_built(parcels: pd.DataFrame) -> pd.Series:
     return year.mask(year.le(0)).astype("Int64")
 
 
-def _apply_confidence(parcels: pd.DataFrame) -> pd.DataFrame:
+def _apply_confidence(parcels: pd.DataFrame, roofprints_graded: bool = False) -> pd.DataFrame:
     """HIGH/MED/LOW plus the names of the predicates that failed.
 
-    HIGH is all six predicates. MED is exactly one failure. LOW is two or more,
-    or a coarse 400-series code regardless of the rest. The failing names are
-    carried out so the ranked view can say *why* a row is not HIGH instead of
-    showing an unexplained chip.
+    HIGH is every graded predicate. MED is exactly one failure. LOW is two or
+    more, a coarse 400-series code, or a floor area estimated from the
+    roofprint -- regardless of the rest. The failing names are carried out so
+    the ranked view can say *why* a row is not HIGH.
+
+    `has_floor_area` reads the assessor's own figure, so a parcel rescued by
+    the roofprint fallback still says the assessor recorded nothing.
     """
     sqft = pd.to_numeric(parcels["sqft"], errors="coerce")
-    # Read defensively: existing tests build parcel frames without this column,
-    # and a missing column is a KeyError where a missing value is not.
+    assessor = pd.to_numeric(
+        parcels["assessor_sqft"] if "assessor_sqft" in parcels else parcels["sqft"],
+        errors="coerce",
+    )
+    # Read defensively: existing tests build parcel frames without these
+    # columns, and a missing column is a KeyError where a missing value is not.
     multi_meter = (
         parcels["multi_meter"] if "multi_meter" in parcels
         else pd.Series(False, index=parcels.index)
     ).fillna(False).astype(bool)
+    roof_count = pd.to_numeric(
+        parcels["roofprint_count"] if "roofprint_count" in parcels
+        else pd.Series(np.nan, index=parcels.index),
+        errors="coerce",
+    )
+    graded = [p for p in PREDICATES if roofprints_graded or p != "single_roofprint"]
     holds = pd.DataFrame(
         {
             "unique_archetype": parcels["unique_archetype"].fillna(False).astype(bool),
-            "has_floor_area": (sqft.notna() & sqft.gt(0)).to_numpy(),
+            "has_floor_area": (assessor.notna() & assessor.gt(0)).to_numpy(),
             "single_record": parcels["record_count"].fillna(1).eq(1).to_numpy(),
             "single_owner": parcels["owner_count"].fillna(1).eq(1).to_numpy(),
             "within_single_meter_cap": sqft.fillna(0.0)
             .le(LIKELY_SINGLE_METERED_MAX_SQFT)
             .to_numpy(),
             "single_meter_archetype": ~multi_meter.to_numpy(),
+            "single_roofprint": roof_count.eq(1).to_numpy(),
         },
         index=parcels.index,
-    )[list(PREDICATES)]
+    )[graded]
 
-    coarse = parcels["collapse_point"].fillna(False).astype(bool)
+    coarse = parcels["collapse_point"].fillna(False).astype(bool).to_numpy()
+    fallback = (
+        parcels["sqft_source"].eq("roofprint").to_numpy()
+        if "sqft_source" in parcels else np.zeros(len(parcels), dtype=bool)
+    )
     failures = ~holds.to_numpy(dtype=bool)
     n_failed = failures.sum(axis=1)
 
     confidence = np.where(
-        coarse.to_numpy() | (n_failed >= 2), "LOW",
+        coarse | fallback | (n_failed >= 2), "LOW",
         np.where(n_failed == 1, "MED", "HIGH"),
     )
 
     # A comprehension over output parcels (~2.1k for Worcester), not over the
     # 47,675 input records. The 47k-row work above is all vectorised.
-    all_names = list(PREDICATES) + [COARSE_REASON]
-    flagged = np.column_stack([failures, coarse.to_numpy()[:, None]])
+    all_names = graded + [COARSE_REASON, FALLBACK_REASON]
+    flagged = np.column_stack([failures, coarse[:, None], fallback[:, None]])
     reasons = [
         tuple(name for name, bad in zip(all_names, row) if bad) for row in flagged
     ]
@@ -562,13 +632,19 @@ def _apply_confidence(parcels: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def load_municipality(dir_path: str | Path, town_id: int | str) -> gpd.GeoDataFrame:
+def load_municipality(
+    dir_path: str | Path, town_id: int | str, structures_path: str | Path | None = None
+) -> gpd.GeoDataFrame:
     """One row per scoreable parcel for one MassGIS L3 municipality directory.
 
     Pure function of `dir_path`: no network, no writes, no cache on disk. Reads
     `M<town_id>TaxPar_*.shp` for geometry and `M<town_id>Assess_*.dbf` for
     attributes, collapses the one-to-many join, attaches the crosswalk and
     grades confidence.
+
+    With `structures_path`, it also joins the MassGIS STRUCTURES_POLY layer:
+    roofprint counts feed the `single_roofprint` predicate, roofprint area
+    fills a missing floor area, and every parcel gets a siting screen result.
 
     Raises `crosswalk.CrosswalkError` if the town uses a building use code the
     crosswalk has never classified, and `IngestError` if the directory is not a
@@ -600,11 +676,15 @@ def load_municipality(dir_path: str | Path, town_id: int | str) -> gpd.GeoDataFr
     )
     taxpar = pyogrio.read_dataframe(taxpar_path, columns=list(TAXPAR_COLUMNS))
 
+    structures = (
+        siting.load_structures(structures_path) if structures_path is not None else None
+    )
     gdf = build_parcels(
         assess,
         taxpar,
         town_id=tid,
         assess_fy_hint=_fy_from_filename(assess_path, taxpar_path),
+        structures=structures,
     )
 
     filename_fy = _fy_from_filename(assess_path, taxpar_path)
@@ -613,6 +693,7 @@ def load_municipality(dir_path: str | Path, town_id: int | str) -> gpd.GeoDataFr
             "source_dir": str(directory),
             "assess_path": str(assess_path),
             "taxpar_path": str(taxpar_path),
+            "structures_path": None if structures_path is None else str(structures_path),
             "assess_fy_from_filename": filename_fy,
             # The FY column wins; a mismatch is recorded, not resolved, because
             # it means the extract and its filename disagree and a human should
