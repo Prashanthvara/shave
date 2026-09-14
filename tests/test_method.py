@@ -131,3 +131,11 @@ def test_the_method_page_says_what_the_map_cannot_show():
     text = stated["map_shows_no_siting"].lower()
     assert "wall" in text
     assert "outline" in text
+
+
+def test_the_method_page_says_the_day_chart_is_one_day_and_blind_overnight():
+    stated = {l.key: l.statement for l in method.LIMITATIONS}
+    assert "day_chart_is_one_day" in stated, sorted(stated)
+    text = stated["day_chart_is_one_day"].lower()
+    assert "overnight" in text
+    assert "not billed" in text

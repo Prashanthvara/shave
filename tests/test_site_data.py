@@ -6,6 +6,8 @@ import pandas as pd
 import pytest
 
 from shave import site_data
+from shave.archetype import INTERVALS_PER_BILLED_DAY, STEP_HOURS
+from shave.assumptions import PEAK_HOUR_END, PEAK_HOUR_START
 
 
 def _scored_stub(loc_id="L1"):
@@ -185,3 +187,71 @@ def test_every_exported_row_carries_a_map_path(worcester_parcels, worcester_scor
                 assert row["path"].startswith("M") and row["path"].endswith("Z")
                 drawn += 1
     assert drawn > 0, "nothing would be drawn"
+
+
+def test_day_profile_puts_load_held_level_and_overnight_on_one_scale():
+    """The page draws all three on one axis and does no arithmetic, so they
+    must arrive already sharing a scale."""
+    row = {"peak_day_kw": [100.0, 400.0, 200.0], "peak_day_held_kw": 150.0,
+           "offpeak_max_kw": 80.0}
+
+    out = site_data.day_profile(row)
+
+    assert out["day_kw"] == [0.25, 1.0, 0.5]
+    assert out["day_held"] == pytest.approx(0.375)
+    assert out["day_offpeak"] == pytest.approx(0.2)
+
+
+def test_an_overnight_load_above_the_billed_peak_sets_the_scale():
+    """A 3 a.m. process is free under this tariff, so overnight load can exceed
+    the billed peak. It must not be drawn off the top of the chart."""
+    out = site_data.day_profile(
+        {"peak_day_kw": [50.0, 100.0], "peak_day_held_kw": 60.0, "offpeak_max_kw": 200.0}
+    )
+
+    assert out["day_offpeak"] == 1.0
+    assert max(out["day_kw"]) == 0.5
+
+
+def test_a_row_with_no_day_yields_an_empty_series_not_a_crash():
+    assert site_data.day_profile({"offpeak_max_kw": 0.0}) == {
+        "day_kw": [], "day_held": 0.0, "day_offpeak": 0.0,
+    }
+
+
+def test_the_payload_carries_the_tariff_axis_so_the_page_restates_nothing():
+    payload = {"schema_version": "1.4.0", "counts": {}, "lists": {"comstock": [
+        {"loc_id": "L1", "rank": 1, "monthly_billed_demand_kw": [1.0] * 12,
+         "monthly_shaveable_kw": [1.0] * 12}], "modeled": []}}
+
+    out = site_data.enrich(payload, _scored_stub())
+
+    assert out["day_axis"] == {
+        "window_start_hour": PEAK_HOUR_START,
+        "window_end_hour": PEAK_HOUR_END,
+        "step_hours": STEP_HOURS,
+    }
+
+
+def test_every_exported_row_carries_its_worst_billed_day(
+    worcester_parcels, worcester_scored
+):
+    """The day's own peak IS that month's billed demand. If `worst` were off by
+    one month, this is the assertion that would say so."""
+    from shave import export
+
+    enriched = site_data.enrich(
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
+
+    for name, rows in enriched["lists"].items():
+        for row in rows:
+            m = row["peak_day_month"]
+            assert 1 <= m <= 12, f"{name} {row['loc_id']} month {m}"
+            assert len(row["day_kw"]) == INTERVALS_PER_BILLED_DAY
+            assert max(row["peak_day_kw"]) == pytest.approx(
+                row["monthly_billed_demand_kw"][m - 1], abs=0.1
+            ), f"{name} {row['loc_id']}"
+            assert 0.0 <= row["day_held"] <= max(row["day_kw"]) + 1e-3
+            assert max(row["day_kw"] + [row["day_offpeak"]]) == pytest.approx(1.0)

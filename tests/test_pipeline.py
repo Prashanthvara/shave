@@ -201,3 +201,52 @@ def test_scale_extrapolation_is_flagged():
     )
 
     assert "scale_extrapolation" in row.flags
+
+
+def _july_spike_archetype() -> FixtureArchetype:
+    """Flat at 100 kW every month, except a one-hour 400 kW spike in July."""
+    windows = np.full((12, INTERVALS_PER_BILLED_DAY), 100.0)
+    windows[6, 20:24] = 400.0
+    return FixtureArchetype(
+        monthly_peak_kw=windows.max(axis=1),
+        windows=windows,
+        offpeak_max_kw=np.full(12, 60.0),
+        source="comstock",
+    )
+
+
+def test_the_peak_day_is_the_month_the_battery_works_hardest():
+    """July's spike is where the most kW come off, so July is the day the
+    drawer draws -- the same month the recharge test already reads."""
+    parcel = {"loc_id": "L1", "sqft": 30_000.0, "archetype": "warehouse",
+              "source": "comstock", "confidence": "HIGH"}
+
+    row = pipeline.score_parcel(parcel, _july_spike_archetype())
+
+    assert row.peak_day_month == 7
+    assert len(row.peak_day_kw) == INTERVALS_PER_BILLED_DAY
+    assert max(row.peak_day_kw) == pytest.approx(row.monthly_billed_demand_kw[6])
+
+
+def test_the_held_level_is_the_billed_peak_less_what_the_battery_removes():
+    parcel = {"loc_id": "L1", "sqft": 30_000.0, "archetype": "warehouse",
+              "source": "comstock", "confidence": "HIGH"}
+
+    row = pipeline.score_parcel(parcel, _july_spike_archetype())
+
+    m = row.peak_day_month - 1
+    expected = row.monthly_billed_demand_kw[m] - row.monthly_shaveable_kw[m]
+    assert row.peak_day_held_kw == pytest.approx(expected, abs=0.1)
+    # 400 kW spike, 250 kW power cap: the battery holds it at 150.
+    assert row.peak_day_held_kw == pytest.approx(150.0, abs=0.1)
+
+
+def test_an_unscored_row_carries_no_day_rather_than_a_fake_one():
+    gdf = pd.DataFrame([{"loc_id": "L9", "sqft": None, "archetype": "warehouse",
+                         "source": "comstock"}])
+
+    out = pipeline.score_parcels(gdf, archetype_factory=lambda p: _flat_archetype(100.0))
+
+    assert out["peak_day_month"].iloc[0] == 0
+    assert tuple(out["peak_day_kw"].iloc[0]) == ()
+    assert out["peak_day_held_kw"].iloc[0] == 0.0

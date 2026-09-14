@@ -3,7 +3,7 @@
 This document and `export.SCHEMA_VERSION` change together. It is the only interface between
 the Python pipeline and anything that renders it.
 
-**Current version: `1.3.0`**
+**Current version: `1.4.0`**
 
 ## Versioning rule
 
@@ -24,6 +24,15 @@ keeps working; the list is simply longer and complete for the sweet-spot view.
 `map.view_box`, empty for a parcel with no geometry. The payload gains a
 top-level `map` object carrying `view_box`. Projection and simplification
 happen at build time; the page injects the string unchanged.
+
+**1.4.0** — rows gain `peak_day_month` (int, 1–12), `peak_day_kw` (float[52], kW)
+and `peak_day_held_kw` (float, kW): the worst billed day of the month the battery
+works hardest, 08:00–20:45 at fifteen-minute steps, and the level the battery holds
+it to. The site payload additionally carries `day_kw`, `day_held` and `day_offpeak`
+on each row — the same day, the held level and `offpeak_max_kw` normalised to one
+shared 0–1 scale — and a top-level `day_axis` object
+`{window_start_hour, window_end_hour, step_hours}` taken from `assumptions.py`.
+MINOR: nothing was removed or retyped.
 
 ## Why there are two lists and not one
 
@@ -96,6 +105,9 @@ record, and two added by the export.
 | `annual_savings_usd` | float | $/yr | The ranking key. Distribution demand charge only. |
 | `shaved_fraction` | float | 0–1 | Mean fraction of billed demand removed. A large site with a small fraction can still rank high on dollars. |
 | `months_at_power_cap` | int | — | Months the battery hits its 250 kW rating. |
+| `peak_day_month` | int | — | The month with the most shaveable kW. `0` on an unscored row. |
+| `peak_day_kw` | float[52] | kW | That month's worst billed day, 08:00–20:45. Its maximum equals `monthly_billed_demand_kw[peak_day_month-1]`. |
+| `peak_day_held_kw` | float | kW | The level the battery holds that day's peak to. |
 | `recharge_feasible` | bool | — | Whether the required overnight charge rate is within the charger's capability. |
 
 ### Screening and confidence

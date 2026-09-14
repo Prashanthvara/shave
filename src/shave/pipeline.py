@@ -63,6 +63,13 @@ class ScoredRow:
     recharge_feasible: bool
     offpeak_max_kw: float
     months_at_power_cap: int
+    #: The month the battery works hardest, 1-12, and that month's worst billed
+    #: day inside the peak window. This is the day the drawer draws. 0 and ()
+    #: on an unscored row: there is no day to draw, and inventing one is worse.
+    peak_day_month: int
+    peak_day_kw: tuple[float, ...]
+    #: The level the battery holds that day's billed peak to.
+    peak_day_held_kw: float
     flags: tuple[str, ...] = ()
     unscored_reason: str | None = None
 
@@ -145,6 +152,11 @@ def score_parcel(parcel: Mapping, archetype: Archetype) -> ScoredRow:
         recharge_feasible=recharge_ok,
         offpeak_max_kw=offpeak_max_kw,
         months_at_power_cap=months_at_cap,
+        peak_day_month=worst + 1,
+        peak_day_kw=tuple(
+            round(float(v), 1) for v in archetype.peak_day_window(worst + 1)
+        ),
+        peak_day_held_kw=round(float(peaks[worst] - shaveable[worst]), 1),
         flags=tuple(flags),
     )
 
@@ -171,6 +183,9 @@ def _unscored(parcel: Mapping, reason: str) -> ScoredRow:
         recharge_feasible=False,
         offpeak_max_kw=0.0,
         months_at_power_cap=0,
+        peak_day_month=0,
+        peak_day_kw=(),
+        peak_day_held_kw=0.0,
         unscored_reason=reason,
     )
 

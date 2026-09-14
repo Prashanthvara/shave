@@ -148,6 +148,14 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "if you may pick only one, because it carries the month's highest "
         "peak. It is not a proof.",
     ),
+    Limitation(
+        "day_chart_is_one_day",
+        "The day chart in the detail panel is one day: the worst billed day of "
+        "the month the battery works hardest. Inside 08:00-21:00 it is the "
+        "archetype's own fifteen-minute load. Overnight only the maximum is "
+        "known, not the shape, so it is drawn as a flat dashed line -- and "
+        "overnight load is not billed under this tariff at any magnitude.",
+    ),
 )
 
 
