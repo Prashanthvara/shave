@@ -139,3 +139,11 @@ def test_the_method_page_says_the_day_chart_is_one_day_and_blind_overnight():
     text = stated["day_chart_is_one_day"].lower()
     assert "overnight" in text
     assert "not billed" in text
+
+
+def test_the_method_page_says_what_the_address_box_searches():
+    stated = {l.key: l.statement for l in method.LIMITATIONS}
+    assert "address_box_is_the_screen_only" in stated, sorted(stated)
+    text = stated["address_box_is_the_screen_only"].lower()
+    assert "residential" in text
+    assert "not screened" in text

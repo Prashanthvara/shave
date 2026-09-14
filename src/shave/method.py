@@ -156,6 +156,14 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "known, not the shape, so it is drawn as a flat dashed line -- and "
         "overnight load is not billed under this tariff at any magnitude.",
     ),
+    Limitation(
+        "address_box_is_the_screen_only",
+        "The address box searches the commercial and industrial parcels this "
+        "screen looked at, by the assessor's own site address. A residential "
+        "parcel, a building recorded under a different street number, or an "
+        "address in a town not yet processed returns no match -- which means "
+        "not screened, not screened out.",
+    ),
 )
 
 
