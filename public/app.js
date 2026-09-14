@@ -157,7 +157,47 @@ export function daySVG(row, axis, w, h) {
   );
 }
 
-export function drawerHTML(row, flagMeanings, dayAxis) {
+// The siting screen is a screen-out, never a green light. Every number here was
+// computed by the build; the page only chooses which sentence to show.
+export function sitingText(row, rule) {
+  const r = rule || {};
+  const run = Math.round(Number(row && row.wall_run_ft) || 0);
+  const clearance = r.clearance_ft != null ? `${r.clearance_ft} ft` : "the required";
+  if (row && row.siting === "clear") {
+    return (
+      `Longest wall with ${clearance} of parcel-side clearance: ${run} ft, facing ` +
+      `${row.wall_facing} (${row.wall_bearing_deg}°). Not a green light: the screen ` +
+      `cannot see loading docks, fire lanes, egress or where the service entrance is.`
+    );
+  }
+  if (row && row.siting === "screened_out") {
+    return (
+      `Screened out: the longest wall with ${clearance} of clearance to the parcel ` +
+      `line runs ${run} ft, under the ${r.min_wall_run_ft} ft two cabinets need. ` +
+      `Stated as a finding.`
+    );
+  }
+  if (row && row.siting === "no_roofprint") {
+    return (
+      `Not assessed: no roofprint sits on this parcel. The building's roof is mapped ` +
+      `mostly on a neighbouring lot, so its walls cannot be attributed here.`
+    );
+  }
+  return `Not assessed: there is no parcel polygon to measure against.`;
+}
+
+// Hatched in ink, never the accent. Hidden until its parcel is selected: at town
+// scale a median wall is two or three units long, and 172 of them at once are noise.
+export function wallHTML(row) {
+  if (!row || !row.wall) return "";
+  return (
+    `<path class="wall" data-id="${esc(row.loc_id)}" d="${esc(row.wall)}" fill="none" ` +
+    `stroke="var(--ink)" stroke-width="2.4" stroke-dasharray="1.2 0.8" ` +
+    `stroke-linecap="butt" pointer-events="none"/>`
+  );
+}
+
+export function drawerHTML(row, flagMeanings, dayAxis, sitingRule) {
   const flags = (row.flags || [])
     .map(
       (f) =>
@@ -188,6 +228,7 @@ export function drawerHTML(row, flagMeanings, dayAxis) {
     `<div><dt>Load shape</dt><dd>${esc(row.archetype)} (${esc(row.source)})</dd></div>` +
     `<div><dt>Confidence</dt><dd><span class="chip ${chipClass(row.confidence)}">` +
     `${esc(row.confidence)}</span>${failed ? " failed: " + esc(failed) : ""}</dd></div>` +
+    `<div><dt>Siting</dt><dd>${esc(sitingText(row, sitingRule))}</dd></div>` +
     flags +
     `</dl>` +
     `<div class="lineage"><strong>How we got here:</strong> use description ` +
@@ -339,6 +380,7 @@ export function mapSVG(rows, viewBox, maxSaving) {
     `aria-label="Worcester parcels, shaded by estimated annual demand-charge ` +
     `saving and outlined by rate class.">` +
     `<g id="parcels">${drawn.map((r) => parcelHTML(r, maxSaving)).join("")}</g>` +
+    `<g id="walls">${drawn.map(wallHTML).join("")}</g>` +
     `</svg>`
   );
 }
@@ -503,6 +545,7 @@ const state = {
   view: "all",
   viewBox: "0 0 620 818",
   dayAxis: null,
+  sitingRule: null,
 };
 
 const WHY_SPLIT =
@@ -523,13 +566,16 @@ function select(id) {
   if (!row) return;
   const tr = $(`#rows tr[data-id="${CSS.escape(id)}"]`);
   if (tr) tr.insertAdjacentHTML("afterend", reasonRowHTML(row));
-  $("#drawer").innerHTML = drawerHTML(row, (state.method || {}).flag_meanings, state.dayAxis);
+  $("#drawer").innerHTML = drawerHTML(
+    row, (state.method || {}).flag_meanings, state.dayAxis, state.sitingRule,
+  );
 
   // The map is a view onto the table, not a picture beside it.
   const classes = parcelSelectionClasses(state.shown, id);
   $$("#map .parcel").forEach((g) => {
     g.setAttribute("class", classes[g.dataset.id] || "parcel");
   });
+  $$("#map .wall").forEach((w) => w.classList.toggle("on", w.dataset.id === id));
 }
 
 function draw() {
@@ -587,6 +633,7 @@ async function boot() {
   state.lists = ranked.lists;
   state.viewBox = (ranked.map || {}).view_box || "0 0 620 818";
   state.dayAxis = ranked.day_axis || null;
+  state.sitingRule = ranked.siting_rule || null;
   const c = ranked.counts;
   $("#counts").textContent =
     `${c.parcels_in.toLocaleString()} parcels screened · ` +
