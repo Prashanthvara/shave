@@ -22,6 +22,8 @@ from collections.abc import Mapping
 import pandas as pd
 
 from shave import method, occupants
+from shave.archetype import STEP_HOURS
+from shave.assumptions import PEAK_HOUR_END, PEAK_HOUR_START
 
 #: Bumped when the page's contract changes. The page refuses to render a
 #: payload whose major version it does not recognise, so a stale deploy fails
@@ -31,6 +33,7 @@ SITE_SCHEMA_VERSION = "1.0.0"
 #: What this module adds on top of an exported row.
 ADDED_ROW_FIELDS: tuple[str, ...] = (
     "occupant", "occupant_source", "window_kw", "shaveable_kw", "path",
+    "day_kw", "day_held", "day_offpeak",
 )
 
 #: What the page reads off every row. Everything but ADDED_ROW_FIELDS comes
@@ -39,8 +42,9 @@ ADDED_ROW_FIELDS: tuple[str, ...] = (
 REQUIRED_ROW_FIELDS: tuple[str, ...] = (
     "loc_id", "rank", "reason", "archetype", "source", "sqft", "avg_12mo_kw",
     "peak_kw", "peak_to_avg", "rate_class", "demand_charge_per_kw",
-    "annual_savings_usd", "shaved_fraction", "confidence", "flags",
-    "sweet_spot", "site_addr", "city", "owner", "use_desc",
+    "annual_savings_usd", "shaved_fraction", "confidence", "confidence_reasons",
+    "flags", "sweet_spot", "site_addr", "city", "owner", "use_desc",
+    "monthly_billed_demand_kw", "peak_day_month", "peak_day_held_kw",
 ) + ADDED_ROW_FIELDS
 
 
@@ -56,6 +60,36 @@ def window_series(row: Mapping) -> list[float]:
     if top <= 0.0:
         return [0.0] * len(values)
     return [round(v / top, 4) for v in values]
+
+
+def day_profile(row: Mapping) -> dict:
+    """The worst billed day, normalised for a 24-hour chart.
+
+    Three things share one scale: the billed-window load, the level the
+    battery holds it to, and the overnight maximum. Normalising them together
+    is what lets the page draw all three on one axis without arithmetic of its
+    own.
+
+    The scale is the larger of the day's peak and the overnight maximum. A
+    3 a.m. process is free under this tariff, so overnight load can exceed the
+    billed peak, and a chart scaled to the window alone would draw it off the
+    top.
+
+    Only the maximum is known overnight, not the shape: the measured half's
+    cache keeps the 52 billed intervals and nothing between 21:00 and 08:00.
+    The page draws that maximum as a dashed line and says it is unbilled.
+    """
+    window = [float(v) for v in (row.get("peak_day_kw") or [])]
+    offpeak = float(row.get("offpeak_max_kw") or 0.0)
+    held = float(row.get("peak_day_held_kw") or 0.0)
+    top = max(window + [offpeak])
+    if not window or top <= 0.0:
+        return {"day_kw": [], "day_held": 0.0, "day_offpeak": 0.0}
+    return {
+        "day_kw": [round(v / top, 3) for v in window],
+        "day_held": round(held / top, 3),
+        "day_offpeak": round(offpeak / top, 3),
+    }
 
 
 def enrich(
@@ -86,10 +120,17 @@ def enrich(
             # Empty string, not a missing key: a parcel with no polygon still
             # belongs in the table, and the page checks truthiness once.
             row["path"] = (paths or {}).get(row["loc_id"], "")
+            row.update(day_profile(row))
 
     if view_box:
         payload["map"] = {"view_box": view_box}
     payload["site_schema_version"] = SITE_SCHEMA_VERSION
+    # The tariff's own hours, so the page never restates 08:00 or 21:00.
+    payload["day_axis"] = {
+        "window_start_hour": PEAK_HOUR_START,
+        "window_end_hour": PEAK_HOUR_END,
+        "step_hours": STEP_HOURS,
+    }
     # The export already ran the regression and carries it. Passing it through
     # rather than dropping it is the difference between a method page that
     # reports R-squared and one that says "not yet run" while the figures sit

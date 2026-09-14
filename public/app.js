@@ -88,7 +88,76 @@ export function reasonRowHTML(row) {
   );
 }
 
-export function drawerHTML(row, flagMeanings) {
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function hh(hour) {
+  return String(hour).padStart(2, "0") + ":00";
+}
+
+// The worst billed day, on a 24-hour axis. Every value arrives normalised to
+// one shared scale by site_data.day_profile, and the tariff's hours arrive in
+// `axis`, so this only maps hours and 0-1 values to pixels. The shaved peak is
+// the load drawn a second time in --signal and clipped to the region above the
+// held line: a shape, not a subtraction.
+export function daySVG(row, axis, w, h) {
+  const a = ((row && row.day_kw) || []).map((v) => Number(v) || 0);
+  if (!a.length || !axis) {
+    return `<p class="dayempty">No day profile for this site.</p>`;
+  }
+  const pad = 1;
+  const ph = h - 14; // plot height; the bottom 14px carry the hour labels
+  const x = (hour) => (pad + (hour / 24) * (w - 2 * pad)).toFixed(1);
+  const y = (v) => (pad + (1 - v) * (ph - 2)).toFixed(1);
+
+  const start = axis.window_start_hour;
+  const end = axis.window_end_hour;
+  const step = axis.step_hours;
+  const base = (ph - pad).toFixed(1);
+  const pts = a.map((v, i) => `${x(start + i * step)},${y(v)}`);
+  const lastX = x(start + (a.length - 1) * step);
+  const area = `M${x(start)},${base} L${pts.join(" L")} L${lastX},${base} Z`;
+  const held = y(Number(row.day_held) || 0);
+  const night = y(Number(row.day_offpeak) || 0);
+
+  const month = MONTHS[(row.peak_day_month || 0) - 1] || "";
+  const peakKw = (row.monthly_billed_demand_kw || [])[(row.peak_day_month || 0) - 1];
+  const label =
+    `Worst billed day${month ? " in " + month : ""}: billed peak ` +
+    `${Math.round(Number(peakKw) || 0)} kW, held to ` +
+    `${Math.round(Number(row.peak_day_held_kw) || 0)} kW. The shaded band is the ` +
+    `billed ${hh(start)} to ${hh(end)} window; the dashed line outside it is the ` +
+    `overnight maximum, which is not billed.`;
+
+  const tick = (hour, anchor) =>
+    `<text x="${x(hour)}" y="${h - 2}" text-anchor="${anchor}" font-size="9" ` +
+    `font-family="var(--mono)" fill="var(--ink-3)">${hh(hour)}</text>`;
+
+  return (
+    `<svg class="day" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" ` +
+    `aria-label="${esc(label)}">` +
+    `<defs><clipPath id="dayshaved"><rect x="0" y="0" width="${w}" height="${held}"/></clipPath></defs>` +
+    `<rect class="billed" x="${x(start)}" y="0" ` +
+    `width="${(((end - start) / 24) * (w - 2 * pad)).toFixed(1)}" height="${ph}" ` +
+    `fill="var(--ink-2)" opacity=".05"/>` +
+    `<line x1="${x(0)}" y1="${night}" x2="${x(start)}" y2="${night}" ` +
+    `stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 2"/>` +
+    `<line x1="${x(end)}" y1="${night}" x2="${x(24)}" y2="${night}" ` +
+    `stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="2 2"/>` +
+    `<path d="${area}" fill="var(--ink-2)" opacity=".16"/>` +
+    `<path d="${area}" fill="var(--signal)" opacity=".55" clip-path="url(#dayshaved)"/>` +
+    `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--ink-2)" ` +
+    `stroke-width="1.1" stroke-linejoin="round"/>` +
+    `<line x1="${x(start)}" y1="${held}" x2="${lastX}" y2="${held}" ` +
+    `stroke="var(--ink)" stroke-width="1" stroke-dasharray="3 2"/>` +
+    tick(0, "start") + tick(start, "middle") + tick(end, "middle") + tick(24, "end") +
+    `</svg>`
+  );
+}
+
+export function drawerHTML(row, flagMeanings, dayAxis) {
   const flags = (row.flags || [])
     .map(
       (f) =>
@@ -100,9 +169,15 @@ export function drawerHTML(row, flagMeanings) {
     ? ` Occupant verified at <a href="${esc(row.occupant_source)}" rel="noopener">` +
       `${esc(row.occupant_source)}</a>.`
     : " Occupant not yet resolved; the name shown is the assessor's use description.";
+  const failed = (row.confidence_reasons || []).map((r) => r.replace(/_/g, " ")).join(" · ");
+  const month = MONTHS[(row.peak_day_month || 0) - 1];
   return (
     `<div class="eyebrow">Detail &middot; ${esc(siteName(row))}</div>` +
-    `<div class="dayprofile">${sparkSVG(row.window_kw, 300, 60)}</div>` +
+    `<div class="dayprofile">${daySVG(row, dayAxis, 302, 84)}</div>` +
+    `<div class="eyebrow" style="margin-top:4px">Worst billed day` +
+    `${month ? " &middot; " + esc(month) : ""} &middot; shaded = billed window ` +
+    `&middot; accent = what the battery removes</div>` +
+    `<div class="dayprofile">${sparkSVG(row.window_kw, 302, 36)}</div>` +
     `<div class="eyebrow" style="margin-top:4px">Billed demand by month &middot; peak marked</div>` +
     `<dl class="kv">` +
     `<div><dt>Address</dt><dd>${esc(row.site_addr)}, ${esc(row.city)}</dd></div>` +
@@ -111,6 +186,8 @@ export function drawerHTML(row, flagMeanings) {
     `<div><dt>Shaveable</dt><dd>${Math.round(row.shaveable_kw)} kW</dd></div>` +
     `<div><dt>Shaved fraction</dt><dd>${(row.shaved_fraction * 100).toFixed(1)}%</dd></div>` +
     `<div><dt>Load shape</dt><dd>${esc(row.archetype)} (${esc(row.source)})</dd></div>` +
+    `<div><dt>Confidence</dt><dd><span class="chip ${chipClass(row.confidence)}">` +
+    `${esc(row.confidence)}</span>${failed ? " failed: " + esc(failed) : ""}</dd></div>` +
     flags +
     `</dl>` +
     `<div class="lineage"><strong>How we got here:</strong> use description ` +
@@ -278,6 +355,138 @@ export function parcelSelectionClasses(rows, selectedId) {
 }
 
 // ---------------------------------------------------------------------------
+// address lookup. parseQuery is src/shave/addresses.py parse_query in
+// JavaScript; both are tested against tests/fixtures/address_cases.json, and
+// the abbreviation table comes from the index rather than living here.
+// ---------------------------------------------------------------------------
+
+const SUPPORTED_INDEX_MAJOR = "1";
+const STATE_TOKENS = new Set(["MA", "MASS", "MASSACHUSETTS"]);
+const ZIPPISH = /^\d{4,5}$/;
+//: A fuzzy candidate must share at least this share of trigrams to be offered.
+const APPROX_MIN = 0.4;
+const APPROX_MAX_RESULTS = 5;
+
+function addrTokens(text) {
+  return String(text || "").toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+}
+
+export function parseQuery(query, towns, abbrev) {
+  const text = typeof query === "string" ? query : "";
+  const cut = text.indexOf(",");
+  let street = addrTokens(cut < 0 ? text : text.slice(0, cut));
+  let town = [];
+  if (cut >= 0) {
+    town = addrTokens(text.slice(cut + 1)).filter((t) => !STATE_TOKENS.has(t) && !ZIPPISH.test(t));
+  } else {
+    while (
+      street.length > 1 &&
+      (STATE_TOKENS.has(street[street.length - 1]) || ZIPPISH.test(street[street.length - 1]))
+    ) {
+      street.pop();
+    }
+    for (const name of towns || []) {
+      const words = addrTokens(name);
+      const tail = street.slice(street.length - words.length);
+      if (street.length > words.length && words.every((w, i) => tail[i] === w)) {
+        street = street.slice(0, street.length - words.length);
+        town = words;
+        break;
+      }
+    }
+  }
+  const map = abbrev || {};
+  return {
+    street: street.map((t) => (Object.hasOwn(map, t) ? map[t] : t)).join(" "),
+    town: town.join(" "),
+  };
+}
+
+function trigrams(s) {
+  const padded = `  ${s} `;
+  const out = new Set();
+  for (let i = 0; i + 3 <= padded.length; i++) out.add(padded.slice(i, i + 3));
+  return out;
+}
+
+export function similarity(a, b) {
+  const A = trigrams(a);
+  const B = trigrams(b);
+  let shared = 0;
+  for (const t of A) if (B.has(t)) shared++;
+  const union = A.size + B.size - shared;
+  return union ? shared / union : 0;
+}
+
+export function lookup(index, query) {
+  const q = parseQuery(query, index.towns, index.abbreviations);
+  if (!q.street) return { kind: "empty", matches: [], town: q.town };
+  if (q.town && !index.towns.includes(q.town)) {
+    return { kind: "outside", matches: [], town: q.town };
+  }
+  const exact = index.entries.filter((e) => e.key === q.street);
+  if (exact.length) return { kind: "exact", matches: exact, town: q.town };
+  const near = index.entries
+    .map((e) => ({ e, s: similarity(q.street, e.key) }))
+    .filter((c) => c.s >= APPROX_MIN)
+    .sort((a, b) => b.s - a.s || (a.e.key < b.e.key ? -1 : a.e.key > b.e.key ? 1 : 0))
+    .slice(0, APPROX_MAX_RESULTS)
+    .map((c) => c.e);
+  return { kind: near.length ? "approximate" : "none", matches: near, town: q.town };
+}
+
+function hitHTML(entry, index) {
+  const sentence = (index.statuses || {})[entry.status] || "";
+  const listName = entry.list === "modeled" ? "Modeled industrial" : "ComStock-backed";
+  const facts = [
+    entry.archetype ? `${esc(entry.archetype)} (${esc(entry.source)})` : "",
+    entry.sqft != null ? `${Number(entry.sqft).toLocaleString("en-US")} sq ft` : "",
+    entry.rate_class ? `rate ${esc(entry.rate_class)}` : "",
+    entry.status !== "ranked" && entry.annual_savings_usd
+      ? `estimated ${fmtMoney(entry.annual_savings_usd)}/yr`
+      : "",
+  ].filter(Boolean).join(" &middot; ");
+  const body =
+    `<div class="addr">${esc(entry.addr)}</div>` +
+    `<div class="status">${entry.status === "ranked"
+      ? `Rank ${esc(entry.rank)} &middot; ${esc(listName)} &middot; ` +
+        `${fmtMoney(entry.annual_savings_usd)}/yr &middot; open it in the list`
+      : esc(sentence)}</div>` +
+    (facts ? `<div class="status">${facts}</div>` : "");
+  // Only a ranked parcel has a row to jump to. Anything else is a statement.
+  return entry.status === "ranked"
+    ? `<li><button type="button" class="hit" data-id="${esc(entry.loc_id)}" ` +
+        `data-list="${esc(entry.list)}">${body}</button></li>`
+    : `<li><div class="hit">${body}</div></li>`;
+}
+
+export function lookupHTML(result, index) {
+  const towns = (index.towns || []).map(esc).join(", ");
+  if (result.kind === "empty") return "";
+  if (result.kind === "outside") {
+    return (
+      `<p class="reason">That address is in ${esc(result.town)}, and this screen ` +
+      `covers ${towns} only. It has not been screened &mdash; which is ` +
+      `different from screened out.</p>`
+    );
+  }
+  if (result.kind === "none") {
+    return (
+      `<p class="reason">No screened parcel matches that address. The index holds ` +
+      `the assessor's own site addresses for ${index.entries.length.toLocaleString("en-US")} ` +
+      `addressed parcels in ${towns}, commercial and industrial only; a residential ` +
+      `parcel, or a building recorded under a different street number, will not ` +
+      `appear.</p>`
+    );
+  }
+  const head =
+    result.kind === "exact"
+      ? `<div class="eyebrow">Exact match</div>`
+      : `<div class="eyebrow">No exact match &middot; nearest addresses, approximate &mdash; check the street number</div>`;
+  return `${head}<ul class="hits">${result.matches.map((e) => hitHTML(e, index)).join("")}</ul>`;
+}
+
+// ---------------------------------------------------------------------------
 // wiring. Everything above is pure and tested; everything below touches the DOM.
 // ---------------------------------------------------------------------------
 
@@ -293,6 +502,7 @@ const state = {
   source: "comstock",
   view: "all",
   viewBox: "0 0 620 818",
+  dayAxis: null,
 };
 
 const WHY_SPLIT =
@@ -313,7 +523,7 @@ function select(id) {
   if (!row) return;
   const tr = $(`#rows tr[data-id="${CSS.escape(id)}"]`);
   if (tr) tr.insertAdjacentHTML("afterend", reasonRowHTML(row));
-  $("#drawer").innerHTML = drawerHTML(row, (state.method || {}).flag_meanings);
+  $("#drawer").innerHTML = drawerHTML(row, (state.method || {}).flag_meanings, state.dayAxis);
 
   // The map is a view onto the table, not a picture beside it.
   const classes = parcelSelectionClasses(state.shown, id);
@@ -376,6 +586,7 @@ async function boot() {
 
   state.lists = ranked.lists;
   state.viewBox = (ranked.map || {}).view_box || "0 0 620 818";
+  state.dayAxis = ranked.day_axis || null;
   const c = ranked.counts;
   $("#counts").textContent =
     `${c.parcels_in.toLocaleString()} parcels screened · ` +
@@ -457,6 +668,55 @@ async function boot() {
       applyFilters();
     }),
   );
+
+  // The address index loads on the first search, never with the page, so the
+  // ranked list's first paint does not wait for it.
+  let addressIndex = null;
+  async function loadAddressIndex() {
+    if (addressIndex) return addressIndex;
+    const idx = await (await fetch("/data/addresses.json")).json();
+    if (String(idx.index_schema_version || "").split(".")[0] !== SUPPORTED_INDEX_MAJOR) {
+      throw new Error(`address index ${idx.index_schema_version} not supported`);
+    }
+    addressIndex = idx;
+    return idx;
+  }
+
+  // A ranked match opens in the list it belongs to. The lists are never merged,
+  // so the source toggle moves to that list rather than the row joining this one.
+  function jumpTo(list, id) {
+    $(list === "modeled" ? "#src-md" : "#src-cs").click();
+    $("#view-all").click();
+    select(id);
+    const tr = $(`#rows tr[data-id="${CSS.escape(id)}"]`);
+    if (tr) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      tr.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      tr.focus({ preventScroll: true });
+    }
+  }
+
+  $("#lookup").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("#addr");
+    const out = $("#lookup-result");
+    input.setAttribute("aria-busy", "true");
+    out.innerHTML = `<p class="whysplit">Loading the address index&hellip;</p>`;
+    try {
+      const idx = await loadAddressIndex();
+      out.innerHTML = lookupHTML(lookup(idx, input.value), idx);
+    } catch (err) {
+      out.innerHTML =
+        `<p class="reason">The address index could not be loaded. The ranked list ` +
+        `and the map are unaffected &mdash; they are served as separate static data.</p>`;
+    } finally {
+      input.removeAttribute("aria-busy");
+    }
+  });
+  $("#lookup-result").addEventListener("click", (e) => {
+    const hit = e.target.closest("button.hit[data-id]");
+    if (hit) jumpTo(hit.dataset.list, hit.dataset.id);
+  });
 
   $$(".tab").forEach((t) =>
     t.addEventListener("click", () => {

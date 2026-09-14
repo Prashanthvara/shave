@@ -148,6 +148,22 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "if you may pick only one, because it carries the month's highest "
         "peak. It is not a proof.",
     ),
+    Limitation(
+        "day_chart_is_one_day",
+        "The day chart in the detail panel is one day: the worst billed day of "
+        "the month the battery works hardest. Inside 08:00-21:00 it is the "
+        "archetype's own fifteen-minute load. Overnight only the maximum is "
+        "known, not the shape, so it is drawn as a flat dashed line -- and "
+        "overnight load is not billed under this tariff at any magnitude.",
+    ),
+    Limitation(
+        "address_box_is_the_screen_only",
+        "The address box searches the commercial and industrial parcels this "
+        "screen looked at, by the assessor's own site address. A residential "
+        "parcel, a building recorded under a different street number, or an "
+        "address in a town not yet processed returns no match -- which means "
+        "not screened, not screened out.",
+    ),
 )
 
 

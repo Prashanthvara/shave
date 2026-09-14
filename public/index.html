@@ -43,6 +43,16 @@
       <span class="vintage" id="counts"></span>
     </div>
 
+    <form class="lookup" id="lookup" role="search" aria-label="Check a building by address">
+      <label for="addr" class="eyebrow">Check a building you know</label>
+      <div class="lookup-row">
+        <input id="addr" name="addr" type="search" autocomplete="off" spellcheck="false"
+               placeholder="e.g. 385 Plantation St, Worcester">
+        <button type="submit">Look up</button>
+      </div>
+      <div id="lookup-result" aria-live="polite"></div>
+    </form>
+
     <div class="split">
       <div class="panel mapbox">
         <div class="panel-head">

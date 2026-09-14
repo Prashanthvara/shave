@@ -10,13 +10,6 @@ from shave.occupants import OccupantError
 
 HEADER = ["loc_id", "occupant", "occupant_source", "verified_on", "note"]
 
-WORCESTER_DIR = Path("data/raw/M348_WORCESTER/L3_SHP_M348_Worcester")
-needs_worcester = pytest.mark.skipif(
-    not (WORCESTER_DIR / "M348TaxPar_CY26_FY26.shp").exists(),
-    reason="Worcester L3 extract not present (data/raw is gitignored)",
-)
-
-
 @pytest.fixture(autouse=True)
 def _clean_occupant_cache():
     occupants.load.cache_clear()
@@ -132,8 +125,7 @@ def test_the_committed_table_is_valid():
         )
 
 
-@needs_worcester
-def test_the_top_ranked_row_names_a_real_business():
+def test_the_top_ranked_row_names_a_real_business(worcester_scored):
     """Success criterion 2, as a test.
 
     The spec: 'The top-ranked site is a real, named Massachusetts operating
@@ -141,18 +133,14 @@ def test_the_top_ranked_row_names_a_real_business():
     If the head of the ranking is a holding company, the deliverable does not
     meet its own bar and this must fail.
     """
-    from shave import ingest, pipeline
-
-    parcels = ingest.load_municipality(str(WORCESTER_DIR), town_id=348)
-    scored = occupants.attach(pipeline.score_parcels(parcels))
+    scored = occupants.attach(worcester_scored)
     top = scored[scored["keep"]].nlargest(1, "annual_savings_usd").iloc[0]
 
     assert top["occupant"], f"top-ranked parcel {top['loc_id']} has no resolved occupant"
     assert top["occupant_source"], "and no source for it"
 
 
-@needs_worcester
-def test_occupant_coverage_of_the_top_fifty_only_ever_goes_up():
+def test_occupant_coverage_of_the_top_fifty_only_ever_goes_up(worcester_scored):
     """A ratchet, not a target.
 
     Resolving the top 50 is hand work and is not finished: the spec asks for
@@ -161,10 +149,7 @@ def test_occupant_coverage_of_the_top_fifty_only_ever_goes_up():
     drops a resolved parcel out of the top 50 fails here. Raise the constant
     as rows land; when it reaches SPEC_TARGET_TOP_50 the spec's bar is met.
     """
-    from shave import ingest, pipeline
-
-    parcels = ingest.load_municipality(str(WORCESTER_DIR), town_id=348)
-    stats = occupants.coverage(pipeline.score_parcels(parcels), top_n=50)
+    stats = occupants.coverage(worcester_scored, top_n=50)
 
     assert stats["top_n_resolved"] >= RESOLVED_TOP_50_TODAY, (
         f"coverage fell to {stats['top_n_resolved']} from {RESOLVED_TOP_50_TODAY}"

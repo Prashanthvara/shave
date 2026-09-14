@@ -1,0 +1,21 @@
+{
+  "towns": ["WORCESTER"],
+  "abbreviations": {
+    "STREET": "ST", "AVENUE": "AVE", "AV": "AVE", "ROAD": "RD", "DRIVE": "DR",
+    "BOULEVARD": "BLVD", "PLACE": "PL", "LANE": "LN", "COURT": "CT",
+    "PARKWAY": "PKWY", "HIGHWAY": "HWY", "SQUARE": "SQ", "TERRACE": "TER",
+    "CIRCLE": "CIR", "TURNPIKE": "TPKE", "EXTENSION": "EXT",
+    "NORTH": "N", "SOUTH": "S", "EAST": "E", "WEST": "W"
+  },
+  "cases": [
+    {"query": "385 Plantation Street, Worcester, MA 01605", "street": "385 PLANTATION ST", "town": "WORCESTER"},
+    {"query": "385 plantation st", "street": "385 PLANTATION ST", "town": ""},
+    {"query": "385 Plantation St Worcester MA 01605-1234", "street": "385 PLANTATION ST", "town": "WORCESTER"},
+    {"query": "100 C Street", "street": "100 C ST", "town": ""},
+    {"query": "12 Main St., Springfield, MA", "street": "12 MAIN ST", "town": "SPRINGFIELD"},
+    {"query": "183 Southwest Cutoff", "street": "183 SOUTHWEST CUTOFF", "town": ""},
+    {"query": "  1001  Millbury  Avenue ", "street": "1001 MILLBURY AVE", "town": ""},
+    {"query": "100 Route 9", "street": "100 ROUTE 9", "town": ""},
+    {"query": "", "street": "", "town": ""}
+  ]
+}

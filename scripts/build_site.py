@@ -5,7 +5,7 @@
 Calls the same `export.build_export` that `scripts/run_pipeline.py` calls, so
 there is one implementation of the ranked contract and no chance of the site
 and the raw export disagreeing. Writes public/data/ranked.json (the enriched
-export) and public/data/method.json.
+export), public/data/method.json and public/data/addresses.json.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-from shave import export, ingest, mapgeo, pipeline, regression, site_data
+from shave import addresses, export, ingest, mapgeo, pipeline, regression, site_data
 
 WORCESTER = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
 
@@ -66,7 +66,16 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    for name in ("ranked.json", "method.json"):
+    # Loaded by the page only on first search, so the ranked list's first
+    # paint never waits for it.
+    index = addresses.build_index(
+        parcels, scored, enriched["lists"], towns=[args.town_name]
+    )
+    (out / "addresses.json").write_text(
+        json.dumps(index, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+    )
+
+    for name in ("ranked.json", "method.json", "addresses.json"):
         print(f"{name:14s} {(out / name).stat().st_size / 1024:8.1f} KB", file=sys.stderr)
     print("lists: " + ", ".join(
         f"{k} {len(v)}" for k, v in enriched["lists"].items()), file=sys.stderr)

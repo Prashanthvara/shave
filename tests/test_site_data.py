@@ -1,18 +1,13 @@
 """What the page reads, adapted from the one export contract."""
 
 import json
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from shave import site_data
-
-WORCESTER_DIR = "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"
-needs_worcester = pytest.mark.skipif(
-    not Path(WORCESTER_DIR + "/M348TaxPar_CY26_FY26.shp").exists(),
-    reason="Worcester L3 extract not present (data/raw is gitignored)",
-)
+from shave.archetype import INTERVALS_PER_BILLED_DAY, STEP_HOURS
+from shave.assumptions import PEAK_HOUR_END, PEAK_HOUR_START
 
 
 def _scored_stub(loc_id="L1"):
@@ -102,17 +97,16 @@ def test_enrich_does_not_mutate_the_export_it_was_given():
     assert json.dumps(payload, sort_keys=True) == before
 
 
-@needs_worcester
-def test_every_field_the_page_reads_is_present_on_every_row():
+def test_every_field_the_page_reads_is_present_on_every_row(
+    worcester_parcels, worcester_scored
+):
     """The consumer contract. A rename in the pipeline or the export must
     break the build, not the browser."""
-    from shave import export, ingest, pipeline
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
-    raw = export.build_export(scored, parcels,
+    raw = export.build_export(worcester_scored, worcester_parcels,
                               town={"name": "Worcester", "town_id": 348}, top_n=25)
-    enriched = site_data.enrich(raw, scored)
+    enriched = site_data.enrich(raw, worcester_scored)
 
     for name, rows in enriched["lists"].items():
         assert rows, f"the {name} list is empty"
@@ -121,32 +115,32 @@ def test_every_field_the_page_reads_is_present_on_every_row():
             assert not missing, f"{name} row {row['loc_id']} missing {sorted(missing)}"
 
 
-@needs_worcester
-def test_the_payload_is_json_serialisable_and_small_enough_to_serve():
-    from shave import export, ingest, pipeline
+def test_the_payload_is_json_serialisable_and_small_enough_to_serve(
+    worcester_parcels, worcester_scored
+):
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
     enriched = site_data.enrich(
-        export.build_export(scored, parcels,
-                            town={"name": "Worcester", "town_id": 348}), scored)
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
 
     blob = json.dumps(enriched, separators=(",", ":"))
     assert len(blob.encode("utf-8")) < export.MAX_BYTES
 
 
-@needs_worcester
-def test_the_top_row_of_each_list_carries_a_named_occupant_and_its_reason():
+def test_the_top_row_of_each_list_carries_a_named_occupant_and_its_reason(
+    worcester_parcels, worcester_scored
+):
     """Success criterion 2, at the point the page reads it, on BOTH lists --
     because the lists are never merged, each one's head is a first row that
     someone will read first."""
-    from shave import export, ingest, pipeline
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
     enriched = site_data.enrich(
-        export.build_export(scored, parcels,
-                            town={"name": "Worcester", "town_id": 348}), scored)
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
 
     for name, rows in enriched["lists"].items():
         top = rows[0]
@@ -156,15 +150,15 @@ def test_the_top_row_of_each_list_carries_a_named_occupant_and_its_reason():
         assert top["occupant_source"].startswith("http"), name
 
 
-@needs_worcester
-def test_each_list_is_ranked_by_dollars_within_itself():
-    from shave import export, ingest, pipeline
+def test_each_list_is_ranked_by_dollars_within_itself(
+    worcester_parcels, worcester_scored
+):
+    from shave import export
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
     enriched = site_data.enrich(
-        export.build_export(scored, parcels,
-                            town={"name": "Worcester", "town_id": 348}), scored)
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
 
     for rows in enriched["lists"].values():
         usd = [r["annual_savings_usd"] for r in rows]
@@ -172,18 +166,16 @@ def test_each_list_is_ranked_by_dollars_within_itself():
         assert [r["rank"] for r in rows] == list(range(1, len(rows) + 1))
 
 
-@needs_worcester
-def test_every_exported_row_carries_a_map_path():
+def test_every_exported_row_carries_a_map_path(worcester_parcels, worcester_scored):
     """One Worcester parcel has no geometry and must still be exported, with
     an empty path rather than a missing key."""
-    from shave import export, ingest, mapgeo, pipeline
+    from shave import export, mapgeo
 
-    parcels = ingest.load_municipality(WORCESTER_DIR, town_id=348)
-    scored = pipeline.score_parcels(parcels)
-    frame = mapgeo.frame_for(parcels)
-    raw = export.build_export(scored, parcels,
+    frame = mapgeo.frame_for(worcester_parcels)
+    raw = export.build_export(worcester_scored, worcester_parcels,
                               town={"name": "Worcester", "town_id": 348}, top_n=25)
-    enriched = site_data.enrich(raw, scored, paths=mapgeo.paths_for(parcels, frame),
+    enriched = site_data.enrich(raw, worcester_scored,
+                                paths=mapgeo.paths_for(worcester_parcels, frame),
                                 view_box=frame.view_box)
 
     assert enriched["map"]["view_box"].startswith("0 0 620 ")
@@ -195,3 +187,71 @@ def test_every_exported_row_carries_a_map_path():
                 assert row["path"].startswith("M") and row["path"].endswith("Z")
                 drawn += 1
     assert drawn > 0, "nothing would be drawn"
+
+
+def test_day_profile_puts_load_held_level_and_overnight_on_one_scale():
+    """The page draws all three on one axis and does no arithmetic, so they
+    must arrive already sharing a scale."""
+    row = {"peak_day_kw": [100.0, 400.0, 200.0], "peak_day_held_kw": 150.0,
+           "offpeak_max_kw": 80.0}
+
+    out = site_data.day_profile(row)
+
+    assert out["day_kw"] == [0.25, 1.0, 0.5]
+    assert out["day_held"] == pytest.approx(0.375)
+    assert out["day_offpeak"] == pytest.approx(0.2)
+
+
+def test_an_overnight_load_above_the_billed_peak_sets_the_scale():
+    """A 3 a.m. process is free under this tariff, so overnight load can exceed
+    the billed peak. It must not be drawn off the top of the chart."""
+    out = site_data.day_profile(
+        {"peak_day_kw": [50.0, 100.0], "peak_day_held_kw": 60.0, "offpeak_max_kw": 200.0}
+    )
+
+    assert out["day_offpeak"] == 1.0
+    assert max(out["day_kw"]) == 0.5
+
+
+def test_a_row_with_no_day_yields_an_empty_series_not_a_crash():
+    assert site_data.day_profile({"offpeak_max_kw": 0.0}) == {
+        "day_kw": [], "day_held": 0.0, "day_offpeak": 0.0,
+    }
+
+
+def test_the_payload_carries_the_tariff_axis_so_the_page_restates_nothing():
+    payload = {"schema_version": "1.4.0", "counts": {}, "lists": {"comstock": [
+        {"loc_id": "L1", "rank": 1, "monthly_billed_demand_kw": [1.0] * 12,
+         "monthly_shaveable_kw": [1.0] * 12}], "modeled": []}}
+
+    out = site_data.enrich(payload, _scored_stub())
+
+    assert out["day_axis"] == {
+        "window_start_hour": PEAK_HOUR_START,
+        "window_end_hour": PEAK_HOUR_END,
+        "step_hours": STEP_HOURS,
+    }
+
+
+def test_every_exported_row_carries_its_worst_billed_day(
+    worcester_parcels, worcester_scored
+):
+    """The day's own peak IS that month's billed demand. If `worst` were off by
+    one month, this is the assertion that would say so."""
+    from shave import export
+
+    enriched = site_data.enrich(
+        export.build_export(worcester_scored, worcester_parcels,
+                            town={"name": "Worcester", "town_id": 348}),
+        worcester_scored)
+
+    for name, rows in enriched["lists"].items():
+        for row in rows:
+            m = row["peak_day_month"]
+            assert 1 <= m <= 12, f"{name} {row['loc_id']} month {m}"
+            assert len(row["day_kw"]) == INTERVALS_PER_BILLED_DAY
+            assert max(row["peak_day_kw"]) == pytest.approx(
+                row["monthly_billed_demand_kw"][m - 1], abs=0.1
+            ), f"{name} {row['loc_id']}"
+            assert 0.0 <= row["day_held"] <= max(row["day_kw"]) + 1e-3
+            assert max(row["day_kw"] + [row["day_offpeak"]]) == pytest.approx(1.0)

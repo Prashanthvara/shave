@@ -9,14 +9,12 @@ Live: **https://shave.pjayav.workers.dev** · Repo: **https://github.com/Prashan
 |---|---|
 | Commits | 40 |
 | Source | 5,045 lines across 11 modules, plus `app.js` / `app.css` |
-| Tests | 4,622 lines — **954 Python** (4 network-marked, deselected) + **31 render** |
+| Tests | **992 Python** (4 network-marked, deselected) + **50 render** |
 | Live response | index + `ranked.json` in **0.21 s** |
-| Coverage of spec stages | **7 of 12 numbered steps complete**, 2 partial |
-| Success criteria | **5 of 7** |
+| Coverage of spec stages | **9 of 12 numbered steps complete**, 2 partial |
+| Success criteria | **6 of 7** |
 
-> The Python suite takes about five minutes. Several integration tests re-run the whole
-> 2,099-parcel pipeline rather than working from fixtures — eleven-plus full runs per suite.
-> A session-scoped fixture would cut it to roughly one.
+> The Python suite scores Worcester once per session (`tests/conftest.py`). It used to re-run the 2,099-parcel pipeline in seven separate tests.
 
 ---
 
@@ -31,7 +29,7 @@ and browsable, which is success criterion 5.
 
 ---
 
-## Stage 1 — 6 of 9 complete, 2 partial
+## Stage 1 — 7 of 9 complete, 2 partial
 
 | # | Spec step | State | Notes |
 |---|---|---|---|
@@ -43,43 +41,28 @@ and browsable, which is success criterion 5.
 | 6 | MECOLS calibration check vs published G-2/G-3 class shapes | ❌ **blocked** | `MECOLS.xlsx` is **not on disk**, despite the spec recording it as "already downloaded, 910 KB". Named as a known gap on the method page rather than quietly dropped. |
 | 7 | **Occupant resolution, top 50** — *"this is the demo; it does not get cut"* | ⚠️ **4 of 50** | Both ranked-list heads are resolved, so criterion 2 holds. The method page reports the real figure, not the target. |
 | 8 | The regression | ✅ | See criterion 3 below. |
-| 9 | Static site: ranked table → detail drawer → method page | ⚠️ **partial** | See "The gap in step 9" below. |
+| 9 | Static site: ranked table → detail drawer → method page | ✅ | Ranked table → drawer (24-hour worst billed day with the billed window shaded, source label, confidence tier and failed predicates, lineage) → method page. The siting slot waits on step 3. |
 
 **Additionally shipped, from the design review rather than the numbered list:**
 
 | | State |
 |---|---|
-| **D2 — the encoding map** (fill opacity = saving, outline = rate class, cross-linked both ways) | ✅ on branch `feat/encoding-map`, not yet merged |
+| **D2 — the encoding map** (fill opacity = saving, outline = rate class, cross-linked both ways) | ✅ merged and live |
 | **D4 — the reason is inline, never behind a click** | ✅ rank 1 selected on load, reason in the first frame |
-
-### The gap in step 9
-
-The spec asks the drawer for a **"24h load sparkline with the 08:00–21:00 window shaded"**.
-The site ships a **12-month billed-demand** sparkline — a different chart.
-
-**The intraday profile already exists and is already computed.** `Archetype.peak_day_window(month)`
-returns 52 points covering exactly 08:00–21:00 and is used by the root-find on every parcel. It is
-simply never exported. This is the highest-value small item outstanding: the data is there, and the
-billed window is the thing the entire tariff argument turns on.
-
-Two smaller omissions in the same step:
-
-- **Confidence tier** appears as a chip on the row but is absent from the drawer's detail list.
-- **Siting result** has no slot filled, because step 3 is not built.
 
 ---
 
-## Stage 2 — 0 of 3, and one of those is correct
+## Stage 2 — 1 of 3, and one of the other two is correctly unbuilt
 
 | # | Spec step | State |
 |---|---|---|
-| 10 | Address box, promoted to Stage 1 by D5 as "the verification moment" | ❌ |
+| 10 | Address box, promoted to Stage 1 by D5 as "the verification moment" | ✅ static index over every screened parcel, no database. Loaded on first search. |
 | 11 | Agent enrichment over the top 50 | ❌ |
 | 12 | Supabase/PostGIS + Worker API **"only if something actually needs it"** | ❌ — **correctly.** Nothing needs it, and an outside review of the spec argued to cut the whole stack. The site is assets-only with no Worker script at all. |
 
 ---
 
-## Success criteria — 5 of 7
+## Success criteria — 6 of 7
 
 | | Criterion | State | Evidence |
 |---|---|---|---|
@@ -89,7 +72,7 @@ Two smaller omissions in the same step:
 | 4 | MECOLS normalized-shape sanity check | ❌ | Blocked on the missing workbook. |
 | 5 | Crosswalk CSV browsable, `modeled` vs `comstock` visible per row | ✅ | |
 | 6 | Method page states what the tool cannot do | ✅ | 15 limitations including the spec's six verbatim, plus 4 named gaps. |
-| 7 | Stage 2: paste an address in a covered town, get a dossier | ❌ | |
+| 7 | Stage 2: paste an address in a covered town, get a dossier | ✅ | Worcester. Exact, approximate and uncovered-town answers; every exported row is found by its own address (`test_addresses.py`). |
 
 ### A note on criterion 3
 
@@ -114,7 +97,7 @@ area, and a straight line cannot follow that kink.
 | `scorer.recharge_feasible` — "both predicates independently" | ⚠️ **deliberately superseded** — see divergences |
 | `siting` | ❌ component not built |
 | `export` — schema version present, payload under the cap | ✅ 11 tests |
-| Worker E2E — cold load < 3 s; Supabase paused → static fallback; address outside covered towns; malformed export | ⚠️ cold load verified by hand, not automated. Two paths are moot (no Supabase, no address box). The malformed-export path exists in `app.js` as a major-version refusal but has no test. |
+| Worker E2E — cold load < 3 s; Supabase paused → static fallback; address outside covered towns; malformed export | ⚠️ cold load verified by hand, not automated. One path is moot (no Supabase). The address box's outside-covered-towns path is tested in render.test.js. The malformed-export path exists in `app.js` as a major-version refusal but has no test. |
 
 Per-file test counts: `ingest` 62, `crosswalk` 46, `scorer` 41, `comstock` 35, `billing_window` 33,
 `render.test.js` 31, `modeled` 17, `export` 11, `method` 11, `occupants` 11, `mapgeo` 10,
@@ -126,14 +109,10 @@ Per-file test counts: `ingest` 62, `crosswalk` 46, `scorer` 41, `comstock` 35, `
 
 | # | Item | Est. | Why this order |
 |---|---|---|---|
-| 1 | **24h sparkline with the billed window shaded** | 1h | Data already computed by `peak_day_window`; closes the most visible part of step 9 and shows the spike the tariff argument rests on. |
-| 2 | **Merge and deploy the map** | 20 min | Task 4 of the map plan (method-page gap) then merge `feat/encoding-map`. |
-| 3 | **Occupant resolution, 46 remaining** | 3h, human | Spec calls it non-deferrable. `/tmp/worksheet.csv` carries them with addresses and dollar values; the ratchet in `tests/test_occupants.py` rises as they land. |
-| 4 | **`STRUCTURES_POLY` + siting screen** | 4.5h | Unblocks step 2's roofprint fallback, fills the drawer's empty slot, and adds the hatched wall run the map legend deliberately omits. |
-| 5 | **Address box** over a static prebuilt index | 2h | Criterion 7, and D5's "verification moment". No database, so it cannot break when a free tier sleeps. |
-| 6 | **New Bedford and Chicopee** | 2h | Each needs an L3 download, a crosswalk pass, and its own `county_gisjoin` (Bristol, Hampden). The municipality control is built for them. |
-| 7 | **MECOLS check** | 1h + fetch | Criterion 4. Re-fetch the workbook first. |
-| 8 | Suite runtime | 1h | Session-scoped fixture; five minutes down to about one. |
+| 1 | **Occupant resolution, 46 remaining** | 3h, human | Spec calls it non-deferrable. `/tmp/worksheet.csv` carries them with addresses and dollar values; the ratchet in `tests/test_occupants.py` rises as they land. |
+| 2 | **`STRUCTURES_POLY` + siting screen** | 4.5h | Unblocks step 2's roofprint fallback, fills the drawer's empty slot, and adds the hatched wall run the map legend deliberately omits. |
+| 3 | **New Bedford and Chicopee** | 2h | Each needs an L3 download, a crosswalk pass, and its own `county_gisjoin` (Bristol, Hampden). The municipality control is built for them. |
+| 4 | **MECOLS check** | 1h + fetch | Criterion 4. Re-fetch the workbook first. |
 
 ---
 
@@ -176,6 +155,13 @@ as an unspecified third channel correlated with floor area, so the picture said 
 Sweet-spot parcels spanned a median 4.3 SVG units against 7.8 for everything else, and 74 of 172
 rendered under 4 units — effectively invisible. Parcels below 9 units are now grown about their own
 centroid (position exact, only drawn size changes) and the legend discloses it.
+
+**7. The drawer's day chart is twenty-four hours wide but only thirteen hours deep.** The spec
+asks for a 24-hour load sparkline. The measured half's cache keeps the 52 billed intervals and
+the month's overnight maximum, not the overnight shape, and re-reading 13 timeseries from S3
+for a line the tariff never bills was not worth a network dependency in the build. The chart
+draws the billed intervals as a line, the overnight maximum as a dashed line labelled unbilled,
+and the method page says so.
 
 ---
 
