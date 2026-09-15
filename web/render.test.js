@@ -549,3 +549,40 @@ describe("drawerHTML siting", () => {
     expect(html).toContain("Screened out");
   });
 });
+
+import { calibrationHTML } from "../public/app.js";
+
+const CAL = {
+  year: 2025,
+  criterion: { hour_tolerance_h: 1, months_required: 9, load_factor_tolerance_pct: 15, load_factor_months_required: 12 },
+  by_rate: {
+    "G-2": { n_parcels: 380, months_hour_ok: 10, months_load_factor_ok: 12, passes: true,
+             peak_shape_ours: Array(12).fill(0.9), peak_shape_mecols: Array(12).fill(0.8) },
+    "G-3": { n_parcels: 148, months_hour_ok: 7, months_load_factor_ok: 11, passes: false,
+             peak_shape_ours: Array(12).fill(1), peak_shape_mecols: Array(12).fill(1) },
+  },
+};
+
+describe("calibrationHTML", () => {
+  it("states the declared criterion and both results plainly, pass or not", () => {
+    const html = calibrationHTML(CAL);
+    expect(html).toContain("10 of 12");
+    expect(html).toContain("7 of 12");
+    expect(html).toContain("Passes");
+    expect(html).toContain("Does not pass");
+    expect(html).toContain("15%");
+    expect(html).toMatch(/not validation/);
+  });
+
+  it("says an unrun check is unreported, not failed", () => {
+    const html = calibrationHTML({ status: "not run: file missing. The result is unreported, not failed." });
+    expect(html).toContain("unreported, not failed");
+    expect(html).not.toContain("<table");
+  });
+
+  it("draws two lines per rate and never spends the accent", () => {
+    const html = calibrationHTML(CAL);
+    expect(html.match(/<polyline/g)).toHaveLength(4);
+    expect(html).not.toContain("var(--signal)");
+  });
+});

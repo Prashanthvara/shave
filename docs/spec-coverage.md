@@ -9,10 +9,10 @@ Live: **https://shave.pjayav.workers.dev** · Repo: **https://github.com/Prashan
 |---|---|
 | Commits | 40 |
 | Source | 5,045 lines across 11 modules, plus `app.js` / `app.css` |
-| Tests | **1016 Python** (4 network-marked, deselected) + **57 render** |
+| Tests | **1033 Python** (4 network-marked, deselected) + **60 render** |
 | Live response | index + `ranked.json` in **0.21 s** |
-| Coverage of spec stages | **8 of 12 numbered steps complete**, 1 partial, 1 blocked |
-| Success criteria | **6 of 7** |
+| Coverage of spec stages | **9 of 12 numbered steps complete**, 1 partial |
+| Success criteria | **7 of 7** |
 
 > The Python suite scores Worcester once per session (`tests/conftest.py`). It used to re-run the 2,099-parcel pipeline in seven separate tests.
 
@@ -29,7 +29,7 @@ and browsable, which is success criterion 5.
 
 ---
 
-## Stage 1 — 7 of 9 complete, 1 partial, 1 blocked
+## Stage 1 — 8 of 9 complete, 1 partial
 
 | # | Spec step | State | Notes |
 |---|---|---|---|
@@ -38,7 +38,7 @@ and browsable, which is success criterion 5.
 | 3 | `STRUCTURES_POLY` join: roofprint count, footprint area, siting geometry | ✅ | MassGIS STRUCTURES_POLY joined by representative point: 1,541 of 2,098 mapped parcels hold one roofprint, 370 several, 187 none. Feeds the single_roofprint predicate (exported HIGH 121 → 87) and the siting screen. |
 | 4 | Archetype library; pin release, upgrade, weather year; individual buildings not aggregates | ✅ | `comstock_amy2018_release_2`, `upgrade=0`, `timeseries_individual_buildings`. 13 archetypes cached. ComStock `sqft` vs `BLDG_AREA` mismatch documented in `comstock.py`. |
 | 5 | Scoring: monthly loop, root-find, band filter, confidence tiers | ✅ | 737 kept, 172 sweet spot. Seven confidence predicates. |
-| 6 | MECOLS calibration check vs published G-2/G-3 class shapes | ❌ **blocked** | `MECOLS.xlsx` is **not on disk**, despite the spec recording it as "already downloaded, 910 KB". Named as a known gap on the method page rather than quietly dropped. |
+| 6 | MECOLS calibration check vs published G-2/G-3 class shapes | ✅ | Ran against MECOLS.xlsx (2025) with the criterion committed in 8d1e979 before the first run. G-2 does not pass, G-3 does not pass; figures on the method page. |
 | 7 | **Occupant resolution, top 50** — *"this is the demo; it does not get cut"* | ⚠️ **4 of 50** | Both ranked-list heads are resolved, so criterion 2 holds. The method page reports the real figure, not the target. |
 | 8 | The regression | ✅ | See criterion 3 below. |
 | 9 | Static site: ranked table → detail drawer → method page | ✅ | Ranked table → drawer (24-hour worst billed day with the billed window shaded, source label, confidence tier and failed predicates, lineage) → method page. Siting line: longest clear wall and bearing, or a stated screen-out. |
@@ -62,14 +62,14 @@ and browsable, which is success criterion 5.
 
 ---
 
-## Success criteria — 6 of 7
+## Success criteria — 7 of 7
 
 | | Criterion | State | Evidence |
 |---|---|---|---|
 | 1 | Public URL, ranked list under 3 s, no signup | ✅ | **0.21 s** measured (index 0.08 + `ranked.json` 0.13). No credential on any route. |
 | 2 | Top-ranked site is a real, named MA operating business with a checkable reason | ✅ | ComStock list: RK Worcester Crossing (Walmart Supercenter anchor). Modelled list: UMass Chan Medical School. Both sourced and dated. |
 | 3 | Both R² figures, published with the explanation, 0.90 threshold declared in advance | ✅ | comstock **0.614 → 0.878** (n=528), modeled **0.493 → 0.749** (n=209). Both under the ceiling, so the archetype layer earns its place. |
-| 4 | MECOLS normalized-shape sanity check | ❌ | Blocked on the missing workbook. |
+| 4 | MECOLS normalized-shape sanity check | ✅ | Ran against MECOLS.xlsx (2025) with the criterion committed in 8d1e979 before the first run. G-2 does not pass, G-3 does not pass; figures on the method page. |
 | 5 | Crosswalk CSV browsable, `modeled` vs `comstock` visible per row | ✅ | |
 | 6 | Method page states what the tool cannot do | ✅ | Limitations including the spec's six verbatim and the siting screen's blind spots, plus 3 named gaps. |
 | 7 | Stage 2: paste an address in a covered town, get a dossier | ✅ | Worcester. Exact, approximate and uncovered-town answers; every exported row is found by its own address (`test_addresses.py`). |
@@ -111,7 +111,6 @@ Per-file test counts: `ingest` 62, `crosswalk` 46, `scorer` 41, `comstock` 35, `
 |---|---|---|---|
 | 1 | **Occupant resolution, 46 remaining** | 3h, human | Spec calls it non-deferrable. `/tmp/worksheet.csv` carries them with addresses and dollar values; the ratchet in `tests/test_occupants.py` rises as they land. |
 | 2 | **New Bedford and Chicopee** | 2.5h | Each needs an L3 download, a crosswalk pass, its own `county_gisjoin` (Bristol, Hampden), and `scripts/fetch_structures.py --town-id`. The municipality control is built for them. |
-| 3 | **MECOLS check** | 1h + fetch | Criterion 4. Re-fetch the workbook first. |
 
 ---
 
@@ -172,6 +171,11 @@ the parcel is drawn at its minimum size, and the legend says so.
 boolean. The status field has four values — `clear`, `screened_out`, `no_roofprint`,
 `no_geometry` — and `clear` is defined everywhere it appears as "not screened out", never
 as suitable.
+
+**10. The class-shape check does not pass for G-2 and G-3.** Hour of peak matched in 0 of 12 months and load
+factor in 0 of 12 for G-2, and 7 of 12 and 0 of 12 for G-3, against a criterion declared before the first run. It is published as a finding: the
+aggregate sums each archetype's worst billed day, which a diversified class average does not, and the
+criterion was not loosened after the result was seen.
 
 ---
 
