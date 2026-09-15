@@ -1,0 +1,352 @@
+town_id,town,elec,fetched_on
+1,ABINGTON,National Grid (Massachusetts Electric),2026-09-15
+2,ACTON,Eversource Energy (NSTAR Electric),2026-09-15
+3,ACUSHNET,Eversource Energy (NSTAR Electric),2026-09-15
+4,ADAMS,National Grid (Massachusetts Electric),2026-09-15
+5,AGAWAM,Eversource Energy (NSTAR Electric),2026-09-15
+6,ALFORD,National Grid (Massachusetts Electric),2026-09-15
+7,AMESBURY,National Grid (Massachusetts Electric),2026-09-15
+8,AMHERST,Eversource Energy (NSTAR Electric),2026-09-15
+9,ANDOVER,National Grid (Massachusetts Electric),2026-09-15
+10,ARLINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+11,ASHBURNHAM,Ashburnham Municipal Light Plant,2026-09-15
+12,ASHBY,Unitil (Fitchburg Gas & Electric),2026-09-15
+13,ASHFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+14,ASHLAND,Eversource Energy (NSTAR Electric),2026-09-15
+15,ATHOL,National Grid (Massachusetts Electric),2026-09-15
+16,ATTLEBORO,National Grid (Massachusetts Electric),2026-09-15
+17,AUBURN,National Grid (Massachusetts Electric),2026-09-15
+18,AVON,National Grid (Massachusetts Electric),2026-09-15
+19,AYER,National Grid (Massachusetts Electric),2026-09-15
+20,BARNSTABLE,Eversource Energy (NSTAR Electric),2026-09-15
+21,BARRE,National Grid (Massachusetts Electric),2026-09-15
+22,BECKET,Eversource Energy (NSTAR Electric),2026-09-15
+23,BEDFORD,Eversource Energy (NSTAR Electric),2026-09-15
+24,BELCHERTOWN,National Grid (Massachusetts Electric),2026-09-15
+25,BELLINGHAM,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+26,BELMONT,Belmont Municipal Light Department,2026-09-15
+27,BERKLEY,Taunton Municipal Lighting Plant,2026-09-15
+28,BERLIN,National Grid (Massachusetts Electric),2026-09-15
+29,BERNARDSTON,Eversource Energy (NSTAR Electric),2026-09-15
+30,BEVERLY,National Grid (Massachusetts Electric),2026-09-15
+31,BILLERICA,National Grid (Massachusetts Electric),2026-09-15
+32,BLACKSTONE,National Grid (Massachusetts Electric),2026-09-15
+33,BLANDFORD,Eversource Energy (NSTAR Electric),2026-09-15
+34,BOLTON,National Grid (Massachusetts Electric),2026-09-15
+35,BOSTON,Eversource Energy (NSTAR Electric),2026-09-15
+36,BOURNE,Eversource Energy (NSTAR Electric),2026-09-15
+37,BOXBOROUGH,Littleton Electric Light & Water Department,2026-09-15
+38,BOXFORD,National Grid (Massachusetts Electric),2026-09-15
+39,BOYLSTON,Boylston Municipal Light Department,2026-09-15
+40,BRAINTREE,Braintree Electric Light Department,2026-09-15
+41,BREWSTER,Eversource Energy (NSTAR Electric),2026-09-15
+42,BRIDGEWATER,National Grid (Massachusetts Electric),2026-09-15
+43,BRIMFIELD,National Grid (Massachusetts Electric),2026-09-15
+44,BROCKTON,National Grid (Massachusetts Electric),2026-09-15
+45,BROOKFIELD,National Grid (Massachusetts Electric),2026-09-15
+46,BROOKLINE,Eversource Energy (NSTAR Electric),2026-09-15
+47,BUCKLAND,Eversource Energy (NSTAR Electric),2026-09-15
+48,BURLINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+49,CAMBRIDGE,Eversource Energy (NSTAR Electric),2026-09-15
+50,CANTON,Eversource Energy (NSTAR Electric),2026-09-15
+51,CARLISLE,Eversource Energy (NSTAR Electric),2026-09-15
+52,CARVER,Eversource Energy (NSTAR Electric),2026-09-15
+53,CHARLEMONT,National Grid (Massachusetts Electric),2026-09-15
+54,CHARLTON,National Grid (Massachusetts Electric),2026-09-15
+55,CHATHAM,Eversource Energy (NSTAR Electric),2026-09-15
+56,CHELMSFORD,National Grid (Massachusetts Electric),2026-09-15
+57,CHELSEA,Eversource Energy (NSTAR Electric),2026-09-15
+58,CHESHIRE,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+59,CHESTER,"Chester Municipal Electric Light Department, Eversource Energy (NSTAR Electric)",2026-09-15
+60,CHESTERFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+61,CHICOPEE,"Chicopee Municipal Lighting Plant, Eversource Energy (NSTAR Electric)",2026-09-15
+62,CHILMARK,Eversource Energy (NSTAR Electric),2026-09-15
+63,CLARKSBURG,National Grid (Massachusetts Electric),2026-09-15
+64,CLINTON,National Grid (Massachusetts Electric),2026-09-15
+65,COHASSET,National Grid (Massachusetts Electric),2026-09-15
+66,COLRAIN,Eversource Energy (NSTAR Electric),2026-09-15
+67,CONCORD,Concord Municipal Light Plant,2026-09-15
+68,CONWAY,Eversource Energy (NSTAR Electric),2026-09-15
+69,CUMMINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+70,DALTON,Eversource Energy (NSTAR Electric),2026-09-15
+71,DANVERS,Danvers Electric Division,2026-09-15
+72,DARTMOUTH,Eversource Energy (NSTAR Electric),2026-09-15
+73,DEDHAM,Eversource Energy (NSTAR Electric),2026-09-15
+74,DEERFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+75,DENNIS,Eversource Energy (NSTAR Electric),2026-09-15
+76,DIGHTON,"Taunton Municipal Lighting Plant, National Grid (Massachusetts Electric)",2026-09-15
+77,DOUGLAS,National Grid (Massachusetts Electric),2026-09-15
+78,DOVER,Eversource Energy (NSTAR Electric),2026-09-15
+79,DRACUT,National Grid (Massachusetts Electric),2026-09-15
+80,DUDLEY,National Grid (Massachusetts Electric),2026-09-15
+81,DUNSTABLE,National Grid (Massachusetts Electric),2026-09-15
+82,DUXBURY,Eversource Energy (NSTAR Electric),2026-09-15
+83,EAST BRIDGEWATER,National Grid (Massachusetts Electric),2026-09-15
+84,EAST BROOKFIELD,National Grid (Massachusetts Electric),2026-09-15
+85,EAST LONGMEADOW,National Grid (Massachusetts Electric),2026-09-15
+86,EASTHAM,Eversource Energy (NSTAR Electric),2026-09-15
+87,EASTHAMPTON,Eversource Energy (NSTAR Electric),2026-09-15
+88,EASTON,National Grid (Massachusetts Electric),2026-09-15
+89,EDGARTOWN,Eversource Energy (NSTAR Electric),2026-09-15
+90,EGREMONT,National Grid (Massachusetts Electric),2026-09-15
+91,ERVING,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+92,ESSEX,National Grid (Massachusetts Electric),2026-09-15
+93,EVERETT,National Grid (Massachusetts Electric),2026-09-15
+94,FAIRHAVEN,Eversource Energy (NSTAR Electric),2026-09-15
+95,FALL RIVER,National Grid (Massachusetts Electric),2026-09-15
+96,FALMOUTH,Eversource Energy (NSTAR Electric),2026-09-15
+97,FITCHBURG,Unitil (Fitchburg Gas & Electric),2026-09-15
+98,FLORIDA,National Grid (Massachusetts Electric),2026-09-15
+99,FOXBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+100,FRAMINGHAM,Eversource Energy (NSTAR Electric),2026-09-15
+101,FRANKLIN,National Grid (Massachusetts Electric),2026-09-15
+102,FREETOWN,Eversource Energy (NSTAR Electric),2026-09-15
+103,GARDNER,National Grid (Massachusetts Electric),2026-09-15
+104,AQUINNAH,Eversource Energy (NSTAR Electric),2026-09-15
+105,GEORGETOWN,Georgetown Municipal Light Department,2026-09-15
+106,GILL,Eversource Energy (NSTAR Electric),2026-09-15
+107,GLOUCESTER,National Grid (Massachusetts Electric),2026-09-15
+108,GOSHEN,National Grid (Massachusetts Electric),2026-09-15
+109,GOSNOLD,Gosnold Electric Light,2026-09-15
+110,GRAFTON,National Grid (Massachusetts Electric),2026-09-15
+111,GRANBY,National Grid (Massachusetts Electric),2026-09-15
+112,GRANVILLE,Eversource Energy (NSTAR Electric),2026-09-15
+113,GREAT BARRINGTON,National Grid (Massachusetts Electric),2026-09-15
+114,GREENFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+115,GROTON,"Groton Electric Light Department, National Grid (Massachusetts Electric)",2026-09-15
+116,GROVELAND,Groveland Municipal Light Department,2026-09-15
+117,HADLEY,Eversource Energy (NSTAR Electric),2026-09-15
+118,HALIFAX,National Grid (Massachusetts Electric),2026-09-15
+119,HAMILTON,National Grid (Massachusetts Electric),2026-09-15
+120,HAMPDEN,National Grid (Massachusetts Electric),2026-09-15
+121,HANCOCK,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+122,HANOVER,National Grid (Massachusetts Electric),2026-09-15
+123,HANSON,National Grid (Massachusetts Electric),2026-09-15
+124,HARDWICK,National Grid (Massachusetts Electric),2026-09-15
+125,HARVARD,National Grid (Massachusetts Electric),2026-09-15
+126,HARWICH,Eversource Energy (NSTAR Electric),2026-09-15
+127,HATFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+128,HAVERHILL,National Grid (Massachusetts Electric),2026-09-15
+129,HAWLEY,National Grid (Massachusetts Electric),2026-09-15
+130,HEATH,National Grid (Massachusetts Electric),2026-09-15
+131,HINGHAM,"Hingham Municipal Light Plant, National Grid (Massachusetts Electric)",2026-09-15
+132,HINSDALE,Eversource Energy (NSTAR Electric),2026-09-15
+133,HOLBROOK,National Grid (Massachusetts Electric),2026-09-15
+134,HOLDEN,Holden Municipal Light Department,2026-09-15
+135,HOLLAND,National Grid (Massachusetts Electric),2026-09-15
+136,HOLLISTON,Eversource Energy (NSTAR Electric),2026-09-15
+137,HOLYOKE,Holyoke Gas & Electric Department,2026-09-15
+138,HOPEDALE,National Grid (Massachusetts Electric),2026-09-15
+139,HOPKINTON,Eversource Energy (NSTAR Electric),2026-09-15
+140,HUBBARDSTON,National Grid (Massachusetts Electric),2026-09-15
+141,HUDSON,Hudson Light and Power Department,2026-09-15
+142,HULL,Hull Municipal Lighting Plant,2026-09-15
+143,HUNTINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+144,IPSWICH,Ipswich Municipal Light Department,2026-09-15
+145,KINGSTON,Eversource Energy (NSTAR Electric),2026-09-15
+146,LAKEVILLE,"Middleborough Gas and Electric Department, Eversource Energy (NSTAR Electric)",2026-09-15
+147,LANCASTER,National Grid (Massachusetts Electric),2026-09-15
+148,LANESBOROUGH,Eversource Energy (NSTAR Electric),2026-09-15
+149,LAWRENCE,National Grid (Massachusetts Electric),2026-09-15
+150,LEE,Eversource Energy (NSTAR Electric),2026-09-15
+151,LEICESTER,National Grid (Massachusetts Electric),2026-09-15
+152,LENOX,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+153,LEOMINSTER,National Grid (Massachusetts Electric),2026-09-15
+154,LEVERETT,Eversource Energy (NSTAR Electric),2026-09-15
+155,LEXINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+156,LEYDEN,Eversource Energy (NSTAR Electric),2026-09-15
+157,LINCOLN,Eversource Energy (NSTAR Electric),2026-09-15
+158,LITTLETON,Littleton Electric Light & Water Department,2026-09-15
+159,LONGMEADOW,Eversource Energy (NSTAR Electric),2026-09-15
+160,LOWELL,National Grid (Massachusetts Electric),2026-09-15
+161,LUDLOW,Eversource Energy (NSTAR Electric),2026-09-15
+162,LUNENBURG,Unitil (Fitchburg Gas & Electric),2026-09-15
+163,LYNN,National Grid (Massachusetts Electric),2026-09-15
+164,LYNNFIELD,"Peabody Municipal Light Plant, Reading Municipal Light Department",2026-09-15
+165,MALDEN,National Grid (Massachusetts Electric),2026-09-15
+166,MANCHESTER-BY-THE-SEA,National Grid (Massachusetts Electric),2026-09-15
+167,MANSFIELD,Mansfield Municipal Electric Department,2026-09-15
+168,MARBLEHEAD,Marblehead Municipal Light Department,2026-09-15
+169,MARION,Eversource Energy (NSTAR Electric),2026-09-15
+170,MARLBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+171,MARSHFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+172,MASHPEE,Eversource Energy (NSTAR Electric),2026-09-15
+173,MATTAPOISETT,Eversource Energy (NSTAR Electric),2026-09-15
+174,MAYNARD,Eversource Energy (NSTAR Electric),2026-09-15
+175,MEDFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+176,MEDFORD,National Grid (Massachusetts Electric),2026-09-15
+177,MEDWAY,Eversource Energy (NSTAR Electric),2026-09-15
+178,MELROSE,National Grid (Massachusetts Electric),2026-09-15
+179,MENDON,National Grid (Massachusetts Electric),2026-09-15
+180,MERRIMAC,Merrimac Municipal Light Department,2026-09-15
+181,METHUEN,National Grid (Massachusetts Electric),2026-09-15
+182,MIDDLEBOROUGH,"Middleborough Gas and Electric Department, Eversource Energy (NSTAR Electric)",2026-09-15
+183,MIDDLEFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+184,MIDDLETON,Middleton Municipal Light Department,2026-09-15
+185,MILFORD,National Grid (Massachusetts Electric),2026-09-15
+186,MILLBURY,National Grid (Massachusetts Electric),2026-09-15
+187,MILLIS,Eversource Energy (NSTAR Electric),2026-09-15
+188,MILLVILLE,National Grid (Massachusetts Electric),2026-09-15
+189,MILTON,Eversource Energy (NSTAR Electric),2026-09-15
+190,MONROE,National Grid (Massachusetts Electric),2026-09-15
+191,MONSON,National Grid (Massachusetts Electric),2026-09-15
+192,MONTAGUE,Eversource Energy (NSTAR Electric),2026-09-15
+193,MONTEREY,National Grid (Massachusetts Electric),2026-09-15
+194,MONTGOMERY,Eversource Energy (NSTAR Electric),2026-09-15
+195,MOUNT WASHINGTON,National Grid (Massachusetts Electric),2026-09-15
+196,NAHANT,National Grid (Massachusetts Electric),2026-09-15
+197,NANTUCKET,National Grid (Nantucket Electric),2026-09-15
+198,NATICK,Eversource Energy (NSTAR Electric),2026-09-15
+199,NEEDHAM,Eversource Energy (NSTAR Electric),2026-09-15
+200,NEW ASHFORD,Eversource Energy (NSTAR Electric),2026-09-15
+201,NEW BEDFORD,Eversource Energy (NSTAR Electric),2026-09-15
+202,NEW BRAINTREE,National Grid (Massachusetts Electric),2026-09-15
+203,NEW MARLBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+204,NEW SALEM,National Grid (Massachusetts Electric),2026-09-15
+205,NEWBURY,National Grid (Massachusetts Electric),2026-09-15
+206,NEWBURYPORT,National Grid (Massachusetts Electric),2026-09-15
+207,NEWTON,Eversource Energy (NSTAR Electric),2026-09-15
+208,NORFOLK,Eversource Energy (NSTAR Electric),2026-09-15
+209,NORTH ADAMS,National Grid (Massachusetts Electric),2026-09-15
+210,NORTH ANDOVER,National Grid (Massachusetts Electric),2026-09-15
+211,NORTH ATTLEBOROUGH,North Attleborough Electric Department,2026-09-15
+212,NORTH BROOKFIELD,National Grid (Massachusetts Electric),2026-09-15
+213,NORTH READING,Reading Municipal Light Department,2026-09-15
+214,NORTHAMPTON,National Grid (Massachusetts Electric),2026-09-15
+215,NORTHBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+216,NORTHBRIDGE,National Grid (Massachusetts Electric),2026-09-15
+217,NORTHFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+218,NORTON,National Grid (Massachusetts Electric),2026-09-15
+219,NORWELL,National Grid (Massachusetts Electric),2026-09-15
+220,NORWOOD,Norwood Municipal Light Department,2026-09-15
+221,OAK BLUFFS,Eversource Energy (NSTAR Electric),2026-09-15
+222,OAKHAM,National Grid (Massachusetts Electric),2026-09-15
+223,ORANGE,National Grid (Massachusetts Electric),2026-09-15
+224,ORLEANS,Eversource Energy (NSTAR Electric),2026-09-15
+225,OTIS,Eversource Energy (NSTAR Electric),2026-09-15
+226,OXFORD,National Grid (Massachusetts Electric),2026-09-15
+227,PALMER,National Grid (Massachusetts Electric),2026-09-15
+228,PAXTON,Paxton Municipal Light Department,2026-09-15
+229,PEABODY,Peabody Municipal Light Plant,2026-09-15
+230,PELHAM,Eversource Energy (NSTAR Electric),2026-09-15
+231,PEMBROKE,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+232,PEPPERELL,National Grid (Massachusetts Electric),2026-09-15
+233,PERU,Eversource Energy (NSTAR Electric),2026-09-15
+234,PETERSHAM,National Grid (Massachusetts Electric),2026-09-15
+235,PHILLIPSTON,National Grid (Massachusetts Electric),2026-09-15
+236,PITTSFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+237,PLAINFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+238,PLAINVILLE,National Grid (Massachusetts Electric),2026-09-15
+239,PLYMOUTH,Eversource Energy (NSTAR Electric),2026-09-15
+240,PLYMPTON,Eversource Energy (NSTAR Electric),2026-09-15
+241,PRINCETON,Princeton Municipal Light Department,2026-09-15
+242,PROVINCETOWN,Eversource Energy (NSTAR Electric),2026-09-15
+243,QUINCY,National Grid (Massachusetts Electric),2026-09-15
+244,RANDOLPH,National Grid (Massachusetts Electric),2026-09-15
+245,RAYNHAM,Taunton Municipal Lighting Plant,2026-09-15
+246,READING,Reading Municipal Light Department,2026-09-15
+247,REHOBOTH,National Grid (Massachusetts Electric),2026-09-15
+248,REVERE,National Grid (Massachusetts Electric),2026-09-15
+249,RICHMOND,Eversource Energy (NSTAR Electric),2026-09-15
+250,ROCHESTER,Eversource Energy (NSTAR Electric),2026-09-15
+251,ROCKLAND,National Grid (Massachusetts Electric),2026-09-15
+252,ROCKPORT,National Grid (Massachusetts Electric),2026-09-15
+253,ROWE,National Grid (Massachusetts Electric),2026-09-15
+254,ROWLEY,Rowley Municipal Lighting Plant,2026-09-15
+255,ROYALSTON,National Grid (Massachusetts Electric),2026-09-15
+256,RUSSELL,"Russell Municipal Lighting Company, Eversource Energy (NSTAR Electric)",2026-09-15
+257,RUTLAND,National Grid (Massachusetts Electric),2026-09-15
+258,SALEM,National Grid (Massachusetts Electric),2026-09-15
+259,SALISBURY,National Grid (Massachusetts Electric),2026-09-15
+260,SANDISFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+261,SANDWICH,Eversource Energy (NSTAR Electric),2026-09-15
+262,SAUGUS,National Grid (Massachusetts Electric),2026-09-15
+263,SAVOY,Eversource Energy (NSTAR Electric),2026-09-15
+264,SCITUATE,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+265,SEEKONK,National Grid (Massachusetts Electric),2026-09-15
+266,SHARON,Eversource Energy (NSTAR Electric),2026-09-15
+267,SHEFFIELD,National Grid (Massachusetts Electric),2026-09-15
+268,SHELBURNE,Eversource Energy (NSTAR Electric),2026-09-15
+269,SHERBORN,Eversource Energy (NSTAR Electric),2026-09-15
+270,SHIRLEY,National Grid (Massachusetts Electric),2026-09-15
+271,SHREWSBURY,Shrewsbury Electric and Cable Operations,2026-09-15
+272,SHUTESBURY,National Grid (Massachusetts Electric),2026-09-15
+273,SOMERSET,National Grid (Massachusetts Electric),2026-09-15
+274,SOMERVILLE,Eversource Energy (NSTAR Electric),2026-09-15
+275,SOUTH HADLEY,South Hadley Electric Light Department,2026-09-15
+276,SOUTHAMPTON,Eversource Energy (NSTAR Electric),2026-09-15
+277,SOUTHBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+278,SOUTHBRIDGE,National Grid (Massachusetts Electric),2026-09-15
+279,SOUTHWICK,Eversource Energy (NSTAR Electric),2026-09-15
+280,SPENCER,National Grid (Massachusetts Electric),2026-09-15
+281,SPRINGFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+282,STERLING,Sterling Municipal Light Department,2026-09-15
+283,STOCKBRIDGE,National Grid (Massachusetts Electric),2026-09-15
+284,STONEHAM,Eversource Energy (NSTAR Electric),2026-09-15
+285,STOUGHTON,National Grid (Massachusetts Electric),2026-09-15
+286,STOW,Hudson Light and Power Department,2026-09-15
+287,STURBRIDGE,National Grid (Massachusetts Electric),2026-09-15
+288,SUDBURY,Eversource Energy (NSTAR Electric),2026-09-15
+289,SUNDERLAND,Eversource Energy (NSTAR Electric),2026-09-15
+290,SUTTON,National Grid (Massachusetts Electric),2026-09-15
+291,SWAMPSCOTT,National Grid (Massachusetts Electric),2026-09-15
+292,SWANSEA,National Grid (Massachusetts Electric),2026-09-15
+293,TAUNTON,Taunton Municipal Lighting Plant,2026-09-15
+294,TEMPLETON,Templeton Municipal Lighting Plant,2026-09-15
+295,TEWKSBURY,National Grid (Massachusetts Electric),2026-09-15
+296,TISBURY,Eversource Energy (NSTAR Electric),2026-09-15
+297,TOLLAND,Eversource Energy (NSTAR Electric),2026-09-15
+298,TOPSFIELD,National Grid (Massachusetts Electric),2026-09-15
+299,TOWNSEND,Unitil (Fitchburg Gas & Electric),2026-09-15
+300,TRURO,Eversource Energy (NSTAR Electric),2026-09-15
+301,TYNGSBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+302,TYRINGHAM,Eversource Energy (NSTAR Electric),2026-09-15
+303,UPTON,National Grid (Massachusetts Electric),2026-09-15
+304,UXBRIDGE,National Grid (Massachusetts Electric),2026-09-15
+305,WAKEFIELD,Wakefield Municipal Light Department,2026-09-15
+306,WALES,National Grid (Massachusetts Electric),2026-09-15
+307,WALPOLE,Eversource Energy (NSTAR Electric),2026-09-15
+308,WALTHAM,Eversource Energy (NSTAR Electric),2026-09-15
+309,WARE,National Grid (Massachusetts Electric),2026-09-15
+310,WAREHAM,Eversource Energy (NSTAR Electric),2026-09-15
+311,WARREN,National Grid (Massachusetts Electric),2026-09-15
+312,WARWICK,National Grid (Massachusetts Electric),2026-09-15
+313,WASHINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+314,WATERTOWN,Eversource Energy (NSTAR Electric),2026-09-15
+315,WAYLAND,Eversource Energy (NSTAR Electric),2026-09-15
+316,WEBSTER,National Grid (Massachusetts Electric),2026-09-15
+317,WELLESLEY,Wellesley Municipal Light Plant,2026-09-15
+318,WELLFLEET,Eversource Energy (NSTAR Electric),2026-09-15
+319,WENDELL,National Grid (Massachusetts Electric),2026-09-15
+320,WENHAM,National Grid (Massachusetts Electric),2026-09-15
+321,WEST BOYLSTON,West Boylston Municipal Lighting Plant,2026-09-15
+322,WEST BRIDGEWATER,National Grid (Massachusetts Electric),2026-09-15
+323,WEST BROOKFIELD,National Grid (Massachusetts Electric),2026-09-15
+324,WEST NEWBURY,National Grid (Massachusetts Electric),2026-09-15
+325,WEST SPRINGFIELD,Eversource Energy (NSTAR Electric),2026-09-15
+326,WEST STOCKBRIDGE,National Grid (Massachusetts Electric),2026-09-15
+327,WEST TISBURY,Eversource Energy (NSTAR Electric),2026-09-15
+328,WESTBOROUGH,National Grid (Massachusetts Electric),2026-09-15
+329,WESTFIELD,"Westfield Gas and Electric Light Department, Eversource Energy (NSTAR Electric)",2026-09-15
+330,WESTFORD,National Grid (Massachusetts Electric),2026-09-15
+331,WESTHAMPTON,Eversource Energy (NSTAR Electric),2026-09-15
+332,WESTMINSTER,National Grid (Massachusetts Electric),2026-09-15
+333,WESTON,Eversource Energy (NSTAR Electric),2026-09-15
+334,WESTPORT,"Eversource Energy (NSTAR Electric), National Grid (Massachusetts Electric)",2026-09-15
+335,WESTWOOD,Eversource Energy (NSTAR Electric),2026-09-15
+336,WEYMOUTH,National Grid (Massachusetts Electric),2026-09-15
+337,WHATELY,Eversource Energy (NSTAR Electric),2026-09-15
+338,WHITMAN,National Grid (Massachusetts Electric),2026-09-15
+339,WILBRAHAM,National Grid (Massachusetts Electric),2026-09-15
+340,WILLIAMSBURG,National Grid (Massachusetts Electric),2026-09-15
+341,WILLIAMSTOWN,National Grid (Massachusetts Electric),2026-09-15
+342,WILMINGTON,Reading Municipal Light Department,2026-09-15
+343,WINCHENDON,National Grid (Massachusetts Electric),2026-09-15
+344,WINCHESTER,Eversource Energy (NSTAR Electric),2026-09-15
+345,WINDSOR,Eversource Energy (NSTAR Electric),2026-09-15
+346,WINTHROP,National Grid (Massachusetts Electric),2026-09-15
+347,WOBURN,Eversource Energy (NSTAR Electric),2026-09-15
+348,WORCESTER,National Grid (Massachusetts Electric),2026-09-15
+349,WORTHINGTON,Eversource Energy (NSTAR Electric),2026-09-15
+350,WRENTHAM,National Grid (Massachusetts Electric),2026-09-15
+351,YARMOUTH,Eversource Energy (NSTAR Electric),2026-09-15
