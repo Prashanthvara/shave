@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
-from shave import method, pipeline
+from shave import method, pipeline, towns
 from shave.assumptions import MIN_AVG_DEMAND_KW, RATED_POWER_KW
 
 INDEX_SCHEMA_VERSION = "1.0.0"
@@ -110,6 +110,12 @@ def _number(value, digits: int):
     return round(f, digits) if digits else int(round(f))
 
 
+def _town_slug(town_id) -> str:
+    if town_id is None or pd.isna(town_id):
+        return ""
+    return towns.by_id(int(town_id)).slug
+
+
 def build_index(
     parcels: pd.DataFrame,
     scored: pd.DataFrame,
@@ -127,7 +133,8 @@ def build_index(
         for name, rows in lists.items()
         for row in rows
     }
-    detail = pd.DataFrame(parcels)[["loc_id", "site_addr", "confidence"]]
+    wanted = ["loc_id", "site_addr", "confidence"] + (["town_id"] if "town_id" in parcels else [])
+    detail = pd.DataFrame(parcels)[wanted]
     merged = scored.merge(detail, on="loc_id", how="left")
 
     entries = []
@@ -151,6 +158,7 @@ def build_index(
             "key": key,
             "addr": str(rec["site_addr"]),
             "loc_id": loc_id,
+            "town": _town_slug(rec.get("town_id")),
             "status": status,
             "list": list_name,
             "rank": rank,

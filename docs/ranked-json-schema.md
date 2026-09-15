@@ -5,6 +5,11 @@ the Python pipeline and anything that renders it.
 
 **Current version: `1.5.0`**
 
+**Site layout 2.0.0** — the page no longer loads `/data/ranked.json`. It loads `/data/index.json`
+(`{site_schema_version, default, towns: [{town_id, name, slug, assess_fy, counts}]}`) and then
+`/data/towns/<slug>/ranked.json` for the chosen town. Each town file is this document's payload for
+one town, ranked within itself and drawn in its own map frame; its `town` object gains `slug`.
+Address index entries gain `town` (a slug).
 ## Versioning rule
 
 - **MINOR** for an added field. A consumer that ignores unknown fields keeps working.
