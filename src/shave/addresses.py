@@ -135,7 +135,9 @@ def build_index(
     }
     wanted = ["loc_id", "site_addr", "confidence"] + (["town_id"] if "town_id" in parcels else [])
     detail = pd.DataFrame(parcels)[wanted]
-    merged = scored.merge(detail, on="loc_id", how="left")
+    # scored carries its own town_id; dropping it here keeps the merge from
+    # suffixing to town_id_x/town_id_y, which would leave every entry townless.
+    merged = scored.drop(columns=["town_id"], errors="ignore").merge(detail, on="loc_id", how="left")
 
     entries = []
     for rec in merged.to_dict("records"):
