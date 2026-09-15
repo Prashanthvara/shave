@@ -38,3 +38,25 @@ def test_extract_urls_follow_the_massgis_pattern():
         "https://s3.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/"
         "shapefiles/l3parcels/L3_SHP_M095_FALLRIVER.zip"
     )
+
+from pathlib import Path
+
+
+@pytest.mark.parametrize("town_id", [95, 160])
+def test_each_new_town_scores_both_lists_with_no_missing_profile(town_id):
+    from shave import ingest, pipeline, siting
+
+    town = towns.by_id(town_id)
+    if not Path(town.l3_dir).is_dir() or not siting.structures_path(town_id).exists():
+        pytest.skip(f"{town.name} extract or roofprints not present")
+
+    parcels = ingest.load_municipality(
+        town.l3_dir, town_id, structures_path=siting.structures_path(town_id))
+    scored = pipeline.score_parcels(parcels)
+    kept = scored[scored["keep"].astype(bool)]
+
+    assert parcels.attrs["roofprints_graded"] is True
+    assert set(kept["source"]) == {"comstock", "modeled"}
+    assert "no_archetype_profile" not in set(scored["unscored_reason"].dropna())
+    hospitals = scored[(scored["archetype"] == "hospital") & scored["unscored_reason"].isna()]
+    assert all("thin_cohort" in flags for flags in hospitals["flags"]), "pooled hospital shapes say so"
