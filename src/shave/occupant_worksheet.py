@@ -109,9 +109,22 @@ def promote(
     existing = set(occupants.load(occupants_path))
     occupants.load.cache_clear()
 
+    rows = list(_read(Path(candidates_path)).values())
+    # A reviewer editing a CSV will type "Verified" or mistype it. Normalise
+    # case and whitespace, and refuse anything that is not a known status
+    # before writing a single row, so a typo is an error rather than a row
+    # that silently never reaches the table.
+    for row in rows:
+        status = (row.get("status") or "").strip().lower()
+        if status not in STATUSES:
+            raise occupants.OccupantError(
+                f"worksheet row {row['loc_id']} has status {row.get('status')!r}; "
+                f"expected one of {', '.join(STATUSES)}"
+            )
+
     new_rows = []
-    for row in _read(Path(candidates_path)).values():
-        if row.get("status", "").strip() != "verified" or row["loc_id"] in existing:
+    for row in rows:
+        if (row.get("status") or "").strip().lower() != "verified" or row["loc_id"] in existing:
             continue
         where = f"worksheet row {row['loc_id']}"
         if not row.get("reviewer", "").strip():

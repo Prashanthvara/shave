@@ -138,3 +138,21 @@ def test_a_verified_row_without_a_web_source_is_refused(tmp_path):
                     "status": "verified", "reviewer": "PJ"}])
     with pytest.raises(occupants.OccupantError, match="source"):
         ow.promote(cands, _occupants(tmp_path), today="2026-09-20")
+
+
+def test_a_capitalised_status_counts_and_a_mistyped_one_is_refused(tmp_path):
+    """Reviewers edit this CSV by hand. 'Verified' must promote, and 'verfied'
+    must stop with an error rather than silently never reaching the table."""
+    occ = _occupants(tmp_path)
+    good = tmp_path / "good.csv"
+    _write(good, [{"loc_id": "A", "candidate_occupant": "Acme", "candidate_source": "https://a.example/",
+                   "status": " Verified ", "reviewer": "PJ"}])
+    assert ow.promote(good, occ, today="2026-09-20") == 1
+
+    bad = tmp_path / "bad.csv"
+    _write(bad, [{"loc_id": "B", "candidate_occupant": "Beta", "candidate_source": "https://b.example/",
+                  "status": "verfied", "reviewer": "PJ"}])
+    before = occ.read_text(encoding="utf-8")
+    with pytest.raises(occupants.OccupantError, match="verfied"):
+        ow.promote(bad, occ, today="2026-09-20")
+    assert occ.read_text(encoding="utf-8") == before
