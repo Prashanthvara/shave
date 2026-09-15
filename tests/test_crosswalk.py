@@ -31,15 +31,19 @@ from shave.crosswalk import (
 )
 
 HEADER = ["use_code", "use_desc", "archetype", "source", "icp_sector", "confidence",
-          "note", "multi_meter"]
+          "note", "multi_meter", "town_id"]
 
-EXPECTED_ROWS = 95
+#: Statewide rows (town_id blank): what `crosswalk.load()` returns.
+EXPECTED_ROWS = 121
+#: Every physical row in the file, town rows included.
+EXPECTED_FILE_ROWS = 178
 EXPECTED_COVERAGE = {
-    "total": 95,
-    "comstock": 50,
-    "modeled": 16,
-    "excluded": 29,
-    "collapse_points": 2,
+    "total": 178,
+    "comstock": 81,
+    "modeled": 26,
+    "excluded": 71,
+    "collapse_points": 3,
+    "town_overrides": 57,
 }
 
 
@@ -151,12 +155,11 @@ def test_every_row_has_a_valid_confidence():
     assert {row.confidence for row in crosswalk.load().values()} <= {"HIGH", "MED", "LOW"}
 
 
-def test_no_duplicate_use_codes_in_the_committed_file():
-    # `load` raises on a duplicate, so a silent merge would show up as a row
-    # count below the number of physical lines in the file.
+def test_no_duplicate_use_codes_within_a_town_in_the_committed_file():
     with crosswalk.CROSSWALK_PATH.open(newline="", encoding="utf-8") as fh:
-        codes = [row["use_code"].strip() for row in csv.DictReader(fh)]
-    assert len(codes) == len(set(codes)) == EXPECTED_ROWS
+        keys = [((row.get("town_id") or "").strip(), row["use_code"].strip())
+                for row in csv.DictReader(fh)]
+    assert len(keys) == len(set(keys)) == EXPECTED_FILE_ROWS
 
 
 def test_the_two_collapse_points_are_the_ones_the_docstring_names():
@@ -165,11 +168,11 @@ def test_the_two_collapse_points_are_the_ones_the_docstring_names():
 
 
 def test_use_codes_are_strings_not_integers():
-    # Worcester carries `942C` and `995`. Anything that coerces the column to
-    # an integer loses both, and 995 would silently become 995 != "995".
+    # Worcester carries `942C` and `9950`. Anything that coerces the column to
+    # an integer loses both, and 9950 would silently become 9950 != "9950".
     codes = set(crosswalk.load())
     assert "942C" in codes
-    assert "995" in codes
+    assert "9950" in codes
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +270,7 @@ def test_assert_covers_passes_on_the_full_committed_set():
 
 
 def test_assert_covers_passes_on_a_subset():
-    crosswalk.assert_covers({"3160", "4000", "995"})
+    crosswalk.assert_covers({"3160", "4000", "9950"})
 
 
 def test_assert_covers_ignores_blank_codes():
@@ -443,3 +446,60 @@ def test_every_shipped_crosswalk_row_has_exactly_the_header_fields():
                 f"header — an unquoted comma. Overflow: {row[None]!r}"
             )
             assert set(row) == fields, f"line {lineno} is missing fields"
+
+
+# ---------------------------------------------------------------------------
+# town rows
+# ---------------------------------------------------------------------------
+
+
+def test_a_town_row_overrides_the_statewide_meaning_for_that_town_only():
+    assert crosswalk.rows_for_town(160)["9512"].archetype == "small_office"
+    assert crosswalk.rows_for_town(348)["9512"].excluded
+    assert crosswalk.rows_for_town(None)["9512"].excluded
+
+
+def test_a_town_only_code_is_invisible_to_other_towns():
+    assert "3401" in crosswalk.rows_for_town(160)
+    assert "3401" not in crosswalk.rows_for_town(95)
+    assert "3401" not in crosswalk.load()
+
+
+def test_worcester_keeps_its_local_9760_and_fall_river_gets_its_library():
+    assert crosswalk.rows_for_town(348)["9760"].excluded
+    assert crosswalk.rows_for_town(95)["9760"].archetype == "medium_office"
+    assert "9760" not in crosswalk.load()
+
+
+def test_the_same_code_may_carry_one_row_per_town(tmp_path):
+    path = write_crosswalk(tmp_path, [
+        good_row(),
+        good_row(town_id="95", archetype="retail_standalone", confidence="LOW"),
+    ])
+    crosswalk.load(path)
+    assert crosswalk.rows_for_town(95, path)["3160"].archetype == "retail_standalone"
+    assert crosswalk.rows_for_town(348, path)["3160"].archetype == "warehouse"
+
+
+def test_a_duplicate_code_within_one_town_is_rejected(tmp_path):
+    path = write_crosswalk(tmp_path, [good_row(town_id="95"), good_row(town_id="95")])
+    with pytest.raises(CrosswalkError, match="duplicate"):
+        crosswalk.load(path)
+
+
+def test_a_non_numeric_town_id_is_rejected(tmp_path):
+    path = write_crosswalk(tmp_path, [good_row(town_id="Lowell")])
+    with pytest.raises(CrosswalkError, match="town_id"):
+        crosswalk.load(path)
+
+
+def test_assert_covers_honours_town_rows():
+    crosswalk.assert_covers({"3401", "9311"}, town_id=160)
+    with pytest.raises(CrosswalkError, match="3401"):
+        crosswalk.assert_covers({"3401"}, town_id=348)
+
+
+def test_lowells_4022_is_a_collapse_point_like_4000():
+    assert crosswalk.rows_for_town(160)["4022"].is_collapse_point
+    statewide = {code for code, row in crosswalk.load().items() if row.is_collapse_point}
+    assert statewide == {"4000", "4010"}

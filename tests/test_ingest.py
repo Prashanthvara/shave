@@ -964,3 +964,40 @@ def test_worcester_grades_roofprints_and_screens_every_parcel(worcester_parcels)
     assert int((gdf["siting"] == "no_geometry").sum()) == 1
     assert int((gdf["roofprint_count"] == 1).sum()) == 1541
     assert dict(gdf["confidence"].value_counts()) == {"MED": 905, "HIGH": 605, "LOW": 589}
+
+
+# ---------------------------------------------------------------------------
+# use codes across towns
+# ---------------------------------------------------------------------------
+
+from shave.ingest import _use_code
+
+
+def test_three_digit_codes_are_padded_and_local_codes_left_alone():
+    """Fall River writes 316 for what Worcester writes 3160. A fourth character
+    is a local sub-code (942C, Lowell's 3401) and must never be touched."""
+    out = list(_use_code(pd.Series(["316", "3160", "942C", "3401", "995", "", None])))
+    assert out == ["3160", "3160", "942C", "3401", "9950", "", ""]
+
+
+def test_a_padded_code_classifies_and_the_town_is_carried():
+    row = only(build_parcels(assess(record(USE_CODE="316")), town_id=WORCESTER_TOWN_ID))
+    assert (row.use_code, row.archetype, row.town_id) == ("3160", "warehouse", 348)
+
+
+def test_a_town_row_reaches_the_parcel():
+    row = only(build_parcels(assess(record(USE_CODE="9512", TOWN_ID=160)), town_id=160))
+    assert row.archetype == "small_office"
+    assert crosswalk.archetype_for("9512", town_id=348) is None
+
+
+@pytest.mark.parametrize("town_id", [95, 160])
+def test_fall_river_and_lowell_load_with_every_use_code_classified(town_id):
+    from shave import towns
+
+    town = towns.by_id(town_id)
+    if not Path(town.l3_dir).is_dir():
+        pytest.skip(f"{town.name} L3 extract not present; run scripts/fetch_l3.py --town-id {town_id}")
+    gdf = load_municipality(town.l3_dir, town_id)
+    assert len(gdf) > 0
+    assert set(gdf["town_id"].dropna().astype(int)) == {town_id}

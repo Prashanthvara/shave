@@ -1,4 +1,4 @@
-use_code,use_desc,archetype,source,icp_sector,confidence,note,multi_meter
+use_code,use_desc,archetype,source,icp_sector,confidence,note,multi_meter,town_id
 3000,Hotels,large_hotel,comstock,,MED,,0
 3010,Motels,small_hotel,comstock,,MED,,0
 3020,"Inns, Resorts, Tourist Homes",small_hotel,comstock,,LOW,Single parcel.,0
@@ -92,5 +92,88 @@ use_code,use_desc,archetype,source,icp_sector,confidence,note,multi_meter
 9720,Transportation Authority,warehouse,comstock,,LOW,Bus and maintenance depots.,0
 9730,"Vacant, Housing Authority",exclude,,,HIGH,Vacant.,0
 9750,"Vacant, Transportation Authority",exclude,,,HIGH,Vacant.,0
-9760,Worcester Redevelopment Authority,exclude,,,MED,,0
-995,"Other, Open Space",exclude,,,HIGH,344 parcels totalling 13 sq ft of building area.,0
+9760,Worcester Redevelopment Authority,exclude,,,MED,Worcester's local use of 976.,0,348
+9950,"Other, Open Space",exclude,,,HIGH,"Written 995 by the assessor and padded to 9950 at ingest. 344 Worcester parcels totalling 13 sq ft of building area.",0,
+3110,Bottled Gas and Propane Gas Tanks,exclude,,,MED,Storage tanks. No building load.,0,
+3130,Lumber Yards,warehouse,comstock,,LOW,Open storage with a yard office; ambient warehouse is the nearest shape.,0,
+3180,Commercial Greenhouses,exclude,,,LOW,Heating and grow-lighting load that no archetype carries. Single small parcel.,0,
+3500,Property Used for Postal Services,warehouse,comstock,,LOW,Sorting and dock operations.,0,
+3540,Bus Transportation Facilities,warehouse,comstock,,LOW,Bus garages and maintenance depots. See 9720.,0,
+3620,Motion Picture Theaters,exclude,,,LOW,ComStock explicitly excludes theaters. See 3640.,0,
+3690,Other Cultural and Entertainment Properties,exclude,,,LOW,Intermittent occupancy.,0,
+3700,Bowling Alleys,exclude,,,LOW,Indoor recreation. See 3770.,0,
+3840,Marinas,exclude,,,MED,Outdoor facility. No meaningful building load.,0,
+3880,Other Outdoor Facilities,exclude,,,HIGH,Driving ranges and similar. No building load.,0,
+3900,Developable Commercial Land,exclude,,,HIGH,Vacant.,0,
+4310,Telephone Relay Towers and Cell Towers,exclude,,,HIGH,Utility asset. Not a customer building.,0,
+4500,Electric Generation Plants,exclude,,,HIGH,A generator. Not a demand-charge customer in the sense this tool models.,0,
+4520,"Electric Generation Plants, Agreement Value",exclude,,,HIGH,See 4500.,0,
+9040,"Colleges and Schools, Private (retired code)",university,modeled,,LOW,Retired 2009. See 9420.,0,
+9170,"DOE: UMass, State and Community Colleges (reimbursable)",university,modeled,,LOW,The reimbursable twin of 9270.,0,
+9190,Commonwealth of Massachusetts (other),medium_office,comstock,,LOW,The reimbursable twin of 9290.,0,
+9260,Judiciary,medium_office,comstock,,MED,Courthouses: office-like weekday occupancy.,0,
+9370,"Improved, Tax Title / Treasurer (Municipal)",exclude,,,MED,Held by the municipality for tax title; occupancy unknown.,0,
+9390,"Improved, District (County)",medium_office,comstock,,LOW,,0,
+9440,Auxiliary Athletic (Educational Private),exclude,,,MED,Intermittent occupancy.,0,
+9450,Affiliated Housing (Educational Private),exclude,,,HIGH,Residential.,0,
+9520,"Auxiliary Use: Storage, Barns (Charitable Org)",exclude,,,MED,,0,
+9610,Rectory or Parsonage,exclude,,,HIGH,Residential.,0,
+9800,"Vacant, Selectmen or City Council, Other City or Town",exclude,,,HIGH,Vacant.,0,
+9810,"Improved, Selectmen or City Council, Other City or Town",medium_office,comstock,,LOW,,0,
+9960,"Other, Non-Taxable Condominium Common Land",exclude,,,HIGH,Common land. No building load.,0,
+3030,Commercial Condo,strip_mall,comstock,,LOW,Condo. Metering almost certainly split. See 3221.,1,95
+3940,Hall,exclude,,,MED,Function hall. Intermittent occupancy.,0,95
+3950,Salon,retail_standalone,comstock,,MED,Small personal-service retail.,0,95
+3990,Other Commercial,exclude,,,LOW,No usable description. See 3222.,0,95
+4050,Industrial Condo,industrial_manufacturing,modeled,,LOW,Condo. Metering almost certainly split. See 4021.,1,95
+9760,Library,medium_office,comstock,,LOW,Fall River's local use of 976; Worcester uses it for its redevelopment authority. See 9560.,0,95
+9770,DPW,warehouse,comstock,,LOW,Municipal public works garages and yards.,0,95
+9970,Other,exclude,,,LOW,No usable description.,0,95
+9980,City Park and Recreation,exclude,,,HIGH,Parkland structures.,0,95
+322I,Other: Dry Cleaner / Laundry,industrial_manufacturing,modeled,,LOW,"Commercial laundry, a named ICP load; modelled as manufacturing, as the 4000 collapse point does.",0,160
+3401,Office Condo,small_office,comstock,,LOW,Condo. Metering almost certainly split.,1,160
+340I,Other: Office Building,office,comstock,,LOW,Size band resolved from floor area.,0,160
+342O,Other: Condo Office,small_office,comstock,,LOW,Condo. Metering almost certainly split.,1,160
+3841,Yacht Club,exclude,,,MED,Seasonal clubhouse.,0,160
+4022,Industrial Building,industrial_manufacturing,modeled,"1,3,4,5",LOW,"COLLAPSE POINT. Lowell's sub-code of 4000, and just as coarse: every kind of manufacturer can carry it. Within this code the ranking is driven by floor area and rate class, not by load shape.",0,160
+404C,Manufacturing and Processing: Research and Development,laboratory,modeled,6,LOW,ComStock explicitly excludes laboratories. See 4040.,0,160
+900C,US Government (commercial building),medium_office,comstock,,MED,See 9000.,0,160
+901R,Public Service Properties (residential-style building),exclude,,,LOW,Residential-style building with no usable type.,0,160
+905C,Private Hospital (Charitable),hospital,comstock,,LOW,See 9050.,0,160
+910R,Environmental Management (residential-style building),exclude,,,LOW,,0,160
+9172,"DOE: UMass, State and Community Colleges (imputed)",university,modeled,,LOW,See 9170.,0,160
+917C,"DOE: UMass, State and Community Colleges (commercial building)",university,modeled,,LOW,UMass Lowell and Middlesex Community College buildings.,0,160
+917I,"DOE: UMass, State and Community Colleges (industrial building)",university,modeled,,LOW,,0,160
+920C,Dept of Conservation and Recreation (commercial building),exclude,,,MED,See 9200.,0,160
+927C,"DOE: UMass Lowell, Middlesex Community College (non-reimbursable)",university,modeled,,LOW,See 9270.,0,160
+928C,DCAM State Office Buildings (non-reimbursable),office,comstock,,LOW,Size band resolved from floor area. See 9280.,0,160
+929C,Commonwealth of Massachusetts Other (non-reimbursable),medium_office,comstock,,LOW,See 9290.,0,160
+9311,City of Lowell (commercial building),medium_office,comstock,,MED,See 9310.,0,160
+9341,Lowell Public Schools (commercial building),secondary_school,comstock,,MED,See 9340.,0,160
+9351,Public Safety (commercial building),small_office,comstock,,MED,Fire and police stations. See 9350.,0,160
+9371,Tax Title (commercial building),exclude,,,MED,See 9370.,0,160
+9372,Other: Condo Office (municipal),small_office,comstock,,LOW,Condo. Metering almost certainly split.,1,160
+9401,Private Elementary School (commercial building),primary_school,comstock,,MED,See 9400.,0,160
+9411,Private Secondary School (commercial building),secondary_school,comstock,,MED,See 9410.,0,160
+9431,Private Other Educational (commercial building),secondary_school,comstock,,LOW,See 9430.,0,160
+9511,Charitable Other (residential-style building),exclude,,,MED,Residential-style building.,0,160
+9512,Charitable Other (commercial building),small_office,comstock,,LOW,"Lowell's 9512 is a commercial charitable building, not the exempt charitable condo the statewide row excludes. See 9510.",0,160
+9513,Charitable Other Condo,exclude,,,LOW,Condo with no usable type. See the statewide 9512.,0,160
+9532,Cemeteries (commercial building),exclude,,,HIGH,,0,160
+9541,Function Hall or Fraternal Organization (commercial building),retail_standalone,comstock,,LOW,Intermittent occupancy. See 9540.,0,160
+9552,Hospital (Charitable; commercial building),hospital,comstock,7,HIGH,See 9550.,0,160
+9561,Library or Museum (commercial building),medium_office,comstock,,LOW,See 9560.,0,160
+9571,Charitable Services (commercial building),medium_office,comstock,,LOW,See 9570.,0,160
+9582,Charitable Recreation (commercial building),exclude,,,MED,See 9580.,0,160
+9591,Charitable Housing (residential-style building),exclude,,,HIGH,Residential.,0,160
+9592,Charitable Housing (commercial building),exclude,,,HIGH,Residential.,0,160
+9601,Church or Temple (residential-style building),exclude,,,HIGH,,0,160
+9602,Church or Temple (commercial building),exclude,,,HIGH,Intermittent occupancy. No shaveable weekday peak.,0,160
+9611,Rectory or Parsonage (residential-style building),exclude,,,HIGH,Residential.,0,160
+9612,Rectory or Parsonage (commercial building),exclude,,,HIGH,Residential.,0,160
+9622,Other Religious (commercial building),exclude,,,HIGH,,0,160
+9701,Housing Authority (commercial building),exclude,,,HIGH,Residential.,0,160
+9702,Housing Authority Condo,exclude,,,HIGH,Residential.,0,160
+9711,Utility Authority (commercial building),exclude,,,HIGH,Utility asset.,0,160
+9721,Transportation Authority (commercial building),warehouse,comstock,,LOW,Bus and maintenance depots. See 9720.,0,160
+9971,Other: Apartments,exclude,,,HIGH,Residential.,0,160
