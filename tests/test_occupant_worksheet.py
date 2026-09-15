@@ -42,6 +42,19 @@ def test_selection_is_the_top_n_plus_every_towns_list_heads_minus_resolved():
     assert (lowell_head["town"], lowell_head["list"], lowell_head["rank"]) == ("Lowell", "comstock", 1)
 
 
+def test_selection_survives_a_scored_frame_that_already_carries_town_id():
+    """The real pipeline frame has town_id, so the merge must not make
+    town_id_x/town_id_y and fail the rank groupby."""
+    scored, parcels = _frames()
+    scored = scored.assign(
+        town_id=[348, 348, 348, 348, 160, 160, 348][: len(scored)]
+    )
+
+    rows = ow.select_rows(scored, parcels, existing={"W2"}, top_n=2)
+
+    assert set(rows["loc_id"]) == {"W1", "W4", "L1", "L2"}
+
+
 def test_rewriting_the_worksheet_keeps_every_research_cell(tmp_path):
     scored, parcels = _frames()
     path = tmp_path / "candidates.csv"

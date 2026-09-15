@@ -44,7 +44,9 @@ def select_rows(
     Rank is within town and list, which is what the page shows.
     """
     detail = pd.DataFrame(parcels)[["loc_id", "town_id", "site_addr", "owner", "use_desc", "sqft"]]
-    kept = scored[scored["keep"].astype(bool)].merge(detail, on="loc_id", how="left")
+    # The real pipeline frame also carries town_id, so the merge would make
+    # town_id_x/town_id_y and the groupby below would fail. Keep scored's.
+    kept = scored[scored["keep"].astype(bool)].merge(detail, on="loc_id", how="left", suffixes=("", "_parcel"))
     kept = kept.assign(
         rank=kept.groupby(["town_id", "source"])["annual_savings_usd"]
         .rank(ascending=False, method="first").astype(int)
