@@ -367,7 +367,12 @@ def test_cache_hit_preserves_widened_and_cohort_size(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(comstock, "connect", lambda: _StubConn())
-    monkeypatch.setattr(comstock, "load_county_index", lambda *a, **k: None)
+    # One Hospital row: the county "has the type", so the statewide-pool
+    # branch is not taken and this test keeps exercising the flag round trip.
+    monkeypatch.setattr(
+        comstock, "load_county_index",
+        lambda *a, **k: pd.DataFrame(
+            [{"bldg_id": 1, "building_type": "Hospital", "sqft": 10_000.0}]))
     monkeypatch.setattr(comstock, "select_representative", lambda *a, **k: rep)
     monkeypatch.setattr(comstock, "reduce_timeseries", lambda *a, **k: prof)
 
@@ -705,3 +710,68 @@ def test_refresh_refuses_to_overwrite_when_the_billed_shape_changed(tmp_path):
     with pytest.raises(comstock.ComStockError, match="changed its billed shape"):
         comstock.refresh_cached_profile(cache, reader=reader)
     assert cache.read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
+# a county without the type
+# ---------------------------------------------------------------------------
+
+from dataclasses import replace as _replace
+
+
+class _Conn:
+    def close(self):
+        pass
+
+
+def _offline(monkeypatch, index_rows):
+    calls = []
+
+    def fake_index(county, conn=None):
+        calls.append(county)
+        return pd.DataFrame(index_rows(county), columns=["bldg_id", "building_type", "sqft"])
+
+    base = comstock.ReducedProfile.from_frame(
+        pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet"))
+
+    def fake_reduce(bldg_id, conn=None, sqft=None):
+        return _replace(base, bldg_id=int(bldg_id), sqft=sqft)
+
+    monkeypatch.setattr(comstock, "load_county_index", fake_index)
+    monkeypatch.setattr(comstock, "reduce_timeseries", fake_reduce)
+    monkeypatch.setattr(comstock, "connect", lambda: _Conn())
+    return calls
+
+
+def test_a_county_without_the_type_pools_every_massachusetts_county(tmp_path, monkeypatch):
+    """Neither Bristol nor Middlesex County has a ComStock hospital."""
+    def rows(county):
+        out = [{"bldg_id": 1, "building_type": "Warehouse", "sqft": 10_000.0}]
+        if county == "G2500090":  # Essex
+            out += [{"bldg_id": 100 + i, "building_type": "Hospital", "sqft": 200_000.0 + i}
+                    for i in range(5)]
+        return out
+
+    calls = _offline(monkeypatch, rows)
+
+    a = comstock.build_archetype("hospital", 50_000.0, county_gisjoin="G2500050", cache_dir=tmp_path)
+
+    assert calls[0] == "G2500050"
+    assert set(calls[1:]) == set(comstock.MA_COUNTY_GISJOINS)
+    assert a.profile.bldg_id in {100, 101, 102, 103, 104}
+    assert a.widened is True and a.cohort_size == 5
+
+
+def test_a_county_with_the_type_is_not_pooled(tmp_path, monkeypatch):
+    calls = _offline(monkeypatch, lambda county: [
+        {"bldg_id": 7, "building_type": "Warehouse", "sqft": 10_000.0}])
+
+    comstock.build_archetype("warehouse", 50_000.0, county_gisjoin="G2500170", cache_dir=tmp_path)
+
+    assert calls == ["G2500170"]
+
+
+def test_every_massachusetts_county_is_in_the_pool():
+    assert len(comstock.MA_COUNTY_GISJOINS) == 14
+    assert comstock.MA_COUNTY_GISJOINS[0] == "G2500010"
+    assert comstock.WORCESTER_COUNTY_GISJOIN in comstock.MA_COUNTY_GISJOINS

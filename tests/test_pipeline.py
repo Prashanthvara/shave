@@ -250,3 +250,24 @@ def test_an_unscored_row_carries_no_day_rather_than_a_fake_one():
     assert out["peak_day_month"].iloc[0] == 0
     assert tuple(out["peak_day_kw"].iloc[0]) == ()
     assert out["peak_day_held_kw"].iloc[0] == 0.0
+
+
+def test_the_default_factory_asks_comstock_for_the_parcels_own_county(monkeypatch):
+    from shave import comstock
+
+    seen = {}
+
+    def fake_build(name, sqft, county_gisjoin=None, **kwargs):
+        seen["county"] = county_gisjoin
+        raise comstock.ComStockError("stop here")
+
+    monkeypatch.setattr(comstock, "build_archetype", fake_build)
+    base = {"archetype": "warehouse", "sqft": 1000.0, "source": "comstock", "loc_id": "L"}
+
+    with pytest.raises(comstock.ComStockError):
+        pipeline.default_archetype_factory({**base, "town_id": 160})
+    assert seen["county"] == "G2500170"
+
+    with pytest.raises(comstock.ComStockError):
+        pipeline.default_archetype_factory(base)
+    assert seen["county"] == "G2500270", "no town means Worcester, as before towns existed"

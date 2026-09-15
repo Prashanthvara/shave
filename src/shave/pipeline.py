@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import pandas as pd
 
-from shave import comstock, crosswalk, modeled, scorer
+from shave import comstock, crosswalk, modeled, scorer, towns
 from shave.archetype import Archetype
 from shave.assumptions import RATED_POWER_KW
 from shave.billing_window import OFFPEAK_HOURS
@@ -202,7 +202,9 @@ def default_archetype_factory(parcel: Mapping) -> Archetype:
             # "office" -- but resolving it in one place only means a future
             # caller that skips ingest gets a ComStockError instead of a band.
             name = crosswalk.resolve_office_band(sqft)
-        return comstock.build_archetype(name, sqft)
+        return comstock.build_archetype(
+            name, sqft, county_gisjoin=towns.county_for(parcel.get("town_id"))
+        )
     return modeled.build_modeled_archetype(name, str(parcel["loc_id"]), sqft)
 
 
