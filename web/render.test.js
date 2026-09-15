@@ -586,3 +586,19 @@ describe("calibrationHTML", () => {
     expect(html).not.toContain("var(--signal)");
   });
 });
+
+describe("methodHTML towns", () => {
+  it("names every covered town with its own assessor year", () => {
+    const { prose } = methodHTML({
+      ...METHOD,
+      towns: [
+        { name: "Worcester", slug: "worcester", assess_fy: 2026 },
+        { name: "Fall River", slug: "fall-river", assess_fy: 2026 },
+        { name: "Lowell", slug: "lowell", assess_fy: 2026 },
+      ],
+    });
+    expect(prose).toContain("Worcester (assessor FY 2026)");
+    expect(prose).toContain("Fall River (assessor FY 2026)");
+    expect(prose).toContain("Lowell (assessor FY 2026)");
+  });
+});

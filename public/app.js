@@ -371,6 +371,11 @@ export function methodHTML(payload) {
     `<p>${esc(cov.parcels_total)} parcels screened; ${esc(cov.kept)} carry enough ` +
     `demand charge to be worth a conversation; ${esc(cov.sweet_spot)} sit in the ` +
     `sweet spot &mdash; the expensive G-2 rate plus a spiky shape.</p>` +
+    ((payload.towns || []).length
+      ? `<p>Covers ${(payload.towns || [])
+          .map((t) => `${esc(t.name)} (assessor FY ${esc(t.assess_fy)})`)
+          .join(", ")}.</p>`
+      : "") +
     `<h2 style="margin-top:16px">Does the archetype layer earn its place?</h2>` +
     regressionBlock +
     `<h2 style="margin-top:16px">Does the aggregate look like National Grid's classes?</h2>` +
