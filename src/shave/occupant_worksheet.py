@@ -96,3 +96,43 @@ def write_worksheet(rows: pd.DataFrame, path: Path | str = CANDIDATES_PATH) -> i
         writer.writeheader()
         writer.writerows(records)
     return len(records)
+
+
+def promote(
+    candidates_path: Path | str, occupants_path: Path | str, today: str
+) -> int:
+    """Append every verified, initialled, sourced worksheet row to the occupant
+    table. Validates everything first and writes nothing if any verified row is
+    incomplete. Rows already in the table are skipped."""
+    dt.date.fromisoformat(today)
+    occupants_path = Path(occupants_path)
+    existing = set(occupants.load(occupants_path))
+    occupants.load.cache_clear()
+
+    new_rows = []
+    for row in _read(Path(candidates_path)).values():
+        if row.get("status", "").strip() != "verified" or row["loc_id"] in existing:
+            continue
+        where = f"worksheet row {row['loc_id']}"
+        if not row.get("reviewer", "").strip():
+            raise occupants.OccupantError(f"{where} is verified but has no reviewer")
+        if not row.get("candidate_occupant", "").strip():
+            raise occupants.OccupantError(f"{where} is verified but has no candidate_occupant")
+        source = row.get("candidate_source", "").strip()
+        if not source.startswith(("http://", "https://")):
+            raise occupants.OccupantError(f"{where} is verified but its source is not a web address: {source!r}")
+        note = f"Verified by {row['reviewer'].strip()}. Evidence: {row.get('evidence', '').strip()}"
+        if row.get("reviewer_note", "").strip():
+            note += f" {row['reviewer_note'].strip()}"
+        new_rows.append({
+            "loc_id": row["loc_id"], "occupant": row["candidate_occupant"].strip(),
+            "occupant_source": source, "verified_on": today, "note": note,
+        })
+
+    if new_rows:
+        with occupants_path.open("a", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(occupants.FIELDS))
+            writer.writerows(new_rows)
+    occupants.load.cache_clear()
+    occupants.load(occupants_path)  # the loader's own validation, on the result
+    return len(new_rows)

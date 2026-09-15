@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from shave import occupant_worksheet as ow
+from shave import occupants
 
 
 def _frames():
@@ -71,3 +72,69 @@ def test_a_new_row_starts_pending_with_empty_research():
     rows = ow.select_rows(scored, parcels, existing=set(), top_n=1)
     assert set(rows["status"]) == {"pending"}
     assert set(rows["candidate_occupant"]) == {""}
+
+
+def _write(path, rows):
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=ow.FIELDS)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({f: row.get(f, "") for f in ow.FIELDS})
+
+
+def _occupants(tmp_path):
+    path = tmp_path / "occupants.csv"
+    path.write_text("loc_id,occupant,occupant_source,verified_on,note\n"
+                    "OLD,Old Co,https://old.example/,2026-09-11,\n", encoding="utf-8")
+    return path
+
+
+@pytest.fixture(autouse=True)
+def _clean_occupant_cache():
+    occupants.load.cache_clear()
+    yield
+    occupants.load.cache_clear()
+
+
+def test_only_verified_initialled_sourced_rows_are_promoted(tmp_path):
+    cands = tmp_path / "c.csv"
+    _write(cands, [
+        {"loc_id": "A", "candidate_occupant": "Acme Mills", "candidate_source": "https://acme.example/",
+         "evidence": "Site lists the address.", "status": "verified", "reviewer": "PJ"},
+        {"loc_id": "B", "candidate_occupant": "Beta Co", "candidate_source": "https://beta.example/",
+         "status": "pending"},
+        {"loc_id": "C", "candidate_occupant": "Gamma", "candidate_source": "https://g.example/",
+         "status": "rejected", "reviewer": "PJ"},
+        {"loc_id": "OLD", "candidate_occupant": "Old Co", "candidate_source": "https://old.example/",
+         "status": "verified", "reviewer": "PJ"},
+    ])
+    occ = _occupants(tmp_path)
+
+    added = ow.promote(cands, occ, today="2026-09-20")
+
+    assert added == 1
+    table = occupants.load(occ)
+    assert set(table) == {"OLD", "A"}
+    assert table["A"].occupant == "Acme Mills"
+    assert table["A"].verified_on == "2026-09-20"
+    assert "PJ" in table["A"].note and "Site lists the address." in table["A"].note
+
+
+def test_a_verified_row_without_a_reviewer_is_refused(tmp_path):
+    cands = tmp_path / "c.csv"
+    _write(cands, [{"loc_id": "A", "candidate_occupant": "Acme", "candidate_source": "https://a.example/",
+                    "status": "verified"}])
+    occ = _occupants(tmp_path)
+    before = occ.read_text(encoding="utf-8")
+
+    with pytest.raises(occupants.OccupantError, match="reviewer"):
+        ow.promote(cands, occ, today="2026-09-20")
+    assert occ.read_text(encoding="utf-8") == before
+
+
+def test_a_verified_row_without_a_web_source_is_refused(tmp_path):
+    cands = tmp_path / "c.csv"
+    _write(cands, [{"loc_id": "A", "candidate_occupant": "Acme", "candidate_source": "Google",
+                    "status": "verified", "reviewer": "PJ"}])
+    with pytest.raises(occupants.OccupantError, match="source"):
+        ow.promote(cands, _occupants(tmp_path), today="2026-09-20")
