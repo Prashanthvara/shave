@@ -158,6 +158,30 @@ COMSTOCK_S3_BASE = (
     "end-use-load-profiles-for-us-building-stock"
 )
 
+# ComStock's timeseries are the AMY2018 weather year: 35,040 fifteen-minute
+# rows over 365 days. Hours in a month for the aggregate come from this year.
+COMSTOCK_WEATHER_YEAR = 2018
+
+# --------------------------------------------------------------------------
+# MECOLS class-shape check (success criterion 4)
+# --------------------------------------------------------------------------
+# DECLARED BEFORE THE CHECK WAS FIRST RUN. The commit that adds these precedes
+# the first computation against real data; changing one after seeing a result
+# would turn a sanity check into a fitted one.
+
+MECOLS_URL = "https://forms.nationalgrid.com/files/loaddata/massachusetts/MECOLS.xlsx"
+
+#: The latest complete calendar year in the workbook (it runs 2023-01 to 2026-06).
+MECOLS_YEAR = 2025
+
+#: Hour of the monthly billed peak must be within this many hours...
+MECOLS_HOUR_TOLERANCE_H = 1
+#: ...in at least this many of the 12 months.
+MECOLS_MONTHS_REQUIRED = 9
+
+#: Monthly load factor must be within this relative tolerance, in all 12 months.
+MECOLS_LOAD_FACTOR_TOLERANCE = 0.15
+
 
 
 # --------------------------------------------------------------------------
@@ -347,6 +371,15 @@ PUBLISHED: tuple[Assumption, ...] = (
         "NREL OEDI",
         "AMY2018 weather. Pinned: release and weather year change which day "
         "is the peak day, which changes every score.",
+    ),
+    Assumption(
+        "mecols_pass_criterion",
+        f"peak hour +/-{MECOLS_HOUR_TOLERANCE_H} h in >={MECOLS_MONTHS_REQUIRED} of 12 months; "
+        f"load factor +/-{MECOLS_LOAD_FACTOR_TOLERANCE:.0%} in all 12",
+        "", "ASSUMED", "design doc, declared before the first run",
+        "Per rate class, G-2 and G-3. The design doc's load-factor clause does "
+        "not say how many months; all 12 is the stricter reading and was fixed "
+        "before any result was seen.",
     ),
     Assumption(
         "charger_rating", CHARGER_KW, "kW", "ASSUMED",
