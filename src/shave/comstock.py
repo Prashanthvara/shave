@@ -231,6 +231,12 @@ class ReducedProfile:
     offpeak_max_kw: np.ndarray = field(
         default_factory=lambda: np.zeros(12, dtype=float)
     )
+    #: Energy over EVERY interval of each calendar month, billed or not, in kWh.
+    #: The MECOLS check needs it for monthly load factor. NaN, never zero, when
+    #: read from a cache written before the column existed.
+    monthly_energy_kwh: np.ndarray = field(
+        default_factory=lambda: np.full(12, np.nan)
+    )
 
     def to_frame(self) -> pd.DataFrame:
         return pd.DataFrame({
@@ -243,6 +249,7 @@ class ReducedProfile:
                 np.nan if self.cohort_size is None else self.cohort_size, 12
             ),
             "offpeak_max_kw": self.offpeak_max_kw,
+            "monthly_energy_kwh": self.monthly_energy_kwh,
             **{f"i{i:02d}": self.windows[:, i] for i in range(INTERVALS_PER_BILLED_DAY)},
         })
 
@@ -272,6 +279,12 @@ class ReducedProfile:
             offpeak = df["offpeak_max_kw"].to_numpy(dtype=float)
         else:
             offpeak = np.zeros(12, dtype=float)
+        if "monthly_energy_kwh" in df.columns:
+            energy = df["monthly_energy_kwh"].to_numpy(dtype=float)
+        else:
+            # NaN, never zero: a zero-energy month gives a load factor of zero
+            # and a calibration verdict computed from nothing.
+            energy = np.full(12, np.nan)
         return cls(
             bldg_id=int(df["bldg_id"].iloc[0]),
             monthly_peak_kw=df["monthly_peak_kw"].to_numpy(dtype=float),
@@ -280,6 +293,7 @@ class ReducedProfile:
             widened=widened,
             cohort_size=cohort_size,
             offpeak_max_kw=offpeak,
+            monthly_energy_kwh=energy,
         )
 
 
@@ -289,6 +303,11 @@ def reduce_from_frame(
     """Twelve monthly peaks and twelve peak-day windows, billed intervals only."""
     ts = pd.DatetimeIndex(raw["timestamp"])
     kw = raw[TOTAL_ELECTRICITY_COL].to_numpy(dtype=float) * KWH_PER_INTERVAL_TO_KW
+
+    # Energy per calendar month over every interval, computed BEFORE the billed
+    # mask drops nights and weekends. Load factor is energy over the whole month.
+    energy = np.zeros(12, dtype=float)
+    np.add.at(energy, ts.month.to_numpy() - 1, kw * (INTERVAL_MINUTES / 60.0))
 
     # Off-peak maximum per month, computed BEFORE the billed mask drops the
     # overnight data. Vectorised: np.maximum.at over a month index, no loop.
@@ -326,7 +345,8 @@ def reduce_from_frame(
         windows[m - 1, m_slot[worst]] = m_kw[worst]
 
     return ReducedProfile(
-        int(bldg_id), peaks, windows, sqft, offpeak_max_kw=offpeak_max
+        int(bldg_id), peaks, windows, sqft,
+        offpeak_max_kw=offpeak_max, monthly_energy_kwh=energy,
     )
 
 
@@ -424,6 +444,11 @@ class ComStockArchetype:
             raise ValueError(f"month must be 1-12, got {month}")
         return float(self.profile.offpeak_max_kw[month - 1] * self._scale)
 
+    def monthly_energy_kwh(self) -> np.ndarray:
+        """Energy per calendar month, scaled to the parcel. NaN if the cached
+        profile predates the column; run scripts/refresh_comstock_energy.py."""
+        return self.profile.monthly_energy_kwh * self._scale
+
 
 def build_archetype(
     archetype_name: str,
@@ -468,3 +493,30 @@ def build_archetype(
         widened=profile.widened,
         cohort_size=profile.cohort_size,
     )
+
+
+def refresh_cached_profile(
+    path: Path | str, reader: Callable[..., ReducedProfile] | None = None
+) -> ReducedProfile:
+    """Re-reduce a cached profile's OWN building, so new columns fill in.
+
+    Re-running representative selection could pick a different building and
+    move every score. This re-reads the bldg_id already in the cache, carries
+    its floor area and cohort flags across, and refuses to write if the billed
+    shape it re-derives differs from the one the scores were computed from.
+    """
+    path = Path(path)
+    old = ReducedProfile.from_frame(pd.read_parquet(path))
+    read = reader or reduce_timeseries
+    fresh = read(old.bldg_id, sqft=old.sqft)
+    new = replace(fresh, sqft=old.sqft, widened=old.widened, cohort_size=old.cohort_size)
+    same_shape = np.allclose(new.monthly_peak_kw, old.monthly_peak_kw) and np.allclose(
+        new.windows, old.windows
+    )
+    if not same_shape:
+        raise ComStockError(
+            f"{path.name}: re-reading building {old.bldg_id} changed its billed "
+            "shape; refusing to overwrite the cache the scores were computed from"
+        )
+    new.to_frame().to_parquet(path)
+    return new

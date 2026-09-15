@@ -1,4 +1,5 @@
 import pytest
+from dataclasses import replace
 
 from shave import comstock
 
@@ -630,3 +631,77 @@ def test_comstock_archetype_still_satisfies_the_protocol():
     assert arch.offpeak_max(1) == pytest.approx(24.0), "scales with the parcel"
     with pytest.raises(ValueError):
         arch.offpeak_max(13)
+
+
+# ---------------------------------------------------------------------------
+# monthly energy, for the MECOLS load-factor check
+# ---------------------------------------------------------------------------
+
+def _flat_year(kw: float = 100.0) -> pd.DataFrame:
+    """A whole 2018 at a constant `kw`, as ComStock's kWh-per-interval column."""
+    ts = pd.date_range("2018-01-01 00:00", "2018-12-31 23:45", freq="15min")
+    kwh = kw / comstock.KWH_PER_INTERVAL_TO_KW
+    return pd.DataFrame({"timestamp": ts, comstock.TOTAL_ELECTRICITY_COL: kwh})
+
+
+def test_monthly_energy_counts_every_interval_billed_or_not():
+    """Load factor is energy over the whole month, nights and weekends included."""
+    prof = comstock.reduce_from_frame(1, _flat_year(100.0), sqft=10_000.0)
+    # January 2018: 31 days x 96 intervals x 100 kW x 0.25 h
+    assert prof.monthly_energy_kwh[0] == pytest.approx(31 * 96 * 100 * 0.25)
+    assert prof.monthly_energy_kwh[1] == pytest.approx(28 * 96 * 100 * 0.25)
+
+
+def test_monthly_energy_survives_the_cache_round_trip():
+    prof = comstock.reduce_from_frame(1, _flat_year(80.0), sqft=10_000.0)
+    back = comstock.ReducedProfile.from_frame(prof.to_frame())
+    np.testing.assert_allclose(back.monthly_energy_kwh, prof.monthly_energy_kwh)
+
+
+def test_a_frame_without_monthly_energy_reads_as_nan_never_zero():
+    """A zero-energy month would give a load factor of zero and a calibration
+    verdict computed from nothing. NaN makes the calibration refuse instead."""
+    prof = comstock.reduce_from_frame(1, _flat_year(80.0), sqft=10_000.0)
+    back = comstock.ReducedProfile.from_frame(prof.to_frame().drop(columns="monthly_energy_kwh"))
+    assert np.isnan(back.monthly_energy_kwh).all()
+
+
+def test_the_committed_fixture_predates_monthly_energy_and_reads_as_nan():
+    df = pd.read_parquet("tests/fixtures/comstock_smalloffice_g2500270.parquet")
+    assert np.isnan(comstock.ReducedProfile.from_frame(df).monthly_energy_kwh).all()
+
+
+def test_refresh_fills_energy_and_keeps_the_building_and_its_flags(tmp_path):
+    original = replace(
+        comstock.reduce_from_frame(7, _flat_year(120.0), sqft=5_000.0),
+        widened=True, cohort_size=2,
+    )
+    cache = tmp_path / "hospital__G2500270.parquet"
+    original.to_frame().drop(columns="monthly_energy_kwh").to_parquet(cache)
+
+    def reader(bldg_id, conn=None, sqft=None):
+        assert bldg_id == 7, "must re-read the cached building, not a new pick"
+        return comstock.reduce_from_frame(bldg_id, _flat_year(120.0), sqft=sqft)
+
+    refreshed = comstock.refresh_cached_profile(cache, reader=reader)
+    back = comstock.ReducedProfile.from_frame(pd.read_parquet(cache))
+
+    assert (back.bldg_id, back.sqft, back.widened, back.cohort_size) == (7, 5_000.0, True, 2)
+    assert not np.isnan(back.monthly_energy_kwh).any()
+    np.testing.assert_allclose(refreshed.monthly_peak_kw, original.monthly_peak_kw)
+
+
+def test_refresh_refuses_to_overwrite_when_the_billed_shape_changed(tmp_path):
+    """The cache is what every score was computed from. If S3 now returns a
+    different shape for the same building, stop rather than silently move them."""
+    original = comstock.reduce_from_frame(7, _flat_year(120.0), sqft=5_000.0)
+    cache = tmp_path / "warehouse__G2500270.parquet"
+    original.to_frame().to_parquet(cache)
+    before = cache.read_bytes()
+
+    def reader(bldg_id, conn=None, sqft=None):
+        return comstock.reduce_from_frame(bldg_id, _flat_year(999.0), sqft=sqft)
+
+    with pytest.raises(comstock.ComStockError, match="changed its billed shape"):
+        comstock.refresh_cached_profile(cache, reader=reader)
+    assert cache.read_bytes() == before
