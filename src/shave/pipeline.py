@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import pandas as pd
 
-from shave import comstock, crosswalk, modeled, scorer
+from shave import comstock, crosswalk, modeled, scorer, towns
 from shave.archetype import Archetype
 from shave.assumptions import RATED_POWER_KW
 from shave.billing_window import OFFPEAK_HOURS
@@ -72,6 +72,14 @@ class ScoredRow:
     peak_day_held_kw: float
     flags: tuple[str, ...] = ()
     unscored_reason: str | None = None
+    #: The municipality the parcel is in. Anything that rebuilds an archetype
+    #: from a scored row -- the MECOLS check -- needs it to find the county.
+    town_id: int | None = None
+
+
+def _town_id(parcel: Mapping) -> int | None:
+    value = parcel.get("town_id")
+    return None if value is None or pd.isna(value) else int(value)
 
 
 def _scale_ratio(archetype: Archetype, sqft: float) -> float:
@@ -158,6 +166,7 @@ def score_parcel(parcel: Mapping, archetype: Archetype) -> ScoredRow:
         ),
         peak_day_held_kw=round(float(peaks[worst] - shaveable[worst]), 1),
         flags=tuple(flags),
+        town_id=_town_id(parcel),
     )
 
 
@@ -187,6 +196,7 @@ def _unscored(parcel: Mapping, reason: str) -> ScoredRow:
         peak_day_kw=(),
         peak_day_held_kw=0.0,
         unscored_reason=reason,
+        town_id=_town_id(parcel),
     )
 
 
@@ -202,7 +212,9 @@ def default_archetype_factory(parcel: Mapping) -> Archetype:
             # "office" -- but resolving it in one place only means a future
             # caller that skips ingest gets a ComStockError instead of a band.
             name = crosswalk.resolve_office_band(sqft)
-        return comstock.build_archetype(name, sqft)
+        return comstock.build_archetype(
+            name, sqft, county_gisjoin=towns.county_for(parcel.get("town_id"))
+        )
     return modeled.build_modeled_archetype(name, str(parcel["loc_id"]), sqft)
 
 

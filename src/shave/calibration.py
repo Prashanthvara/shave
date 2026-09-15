@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from shave import comstock
+from shave import comstock, pipeline
 from shave.archetype import INTERVALS_PER_BILLED_DAY, STEP_HOURS
 from shave.assumptions import (
     COMSTOCK_WEATHER_YEAR,
@@ -99,7 +99,10 @@ def mecols_monthly(frame: pd.DataFrame, rate: str, year: int) -> MonthlyShape:
 
 
 def _default_factory(row: Mapping) -> comstock.ComStockArchetype:
-    return comstock.build_archetype(str(row["archetype"]), float(row["sqft"]))
+    # The scorer's own factory, so each row is rebuilt from its own town's
+    # county. Calling build_archetype without a county would give a Fall River
+    # or Lowell parcel Worcester County's shape, silently.
+    return pipeline.default_archetype_factory(row)
 
 
 def bottom_up_monthly(

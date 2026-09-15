@@ -162,3 +162,26 @@ def test_the_real_check_reports_both_rates_over_twelve_months(worcester_scored, 
         assert len(r["peak_hour_ours"]) == len(r["load_factor_mecols"]) == 12
         assert isinstance(r["passes"], bool)
     json.dumps(out)
+
+
+def test_the_default_factory_rebuilds_each_row_from_its_own_county(monkeypatch):
+    """A Lowell row must get a Middlesex County shape, not Worcester's."""
+    from shave import comstock
+
+    seen = []
+
+    def fake_build(name, sqft, county_gisjoin=None, **kwargs):
+        seen.append(county_gisjoin)
+        return _Stub(1.0)
+
+    monkeypatch.setattr(comstock, "build_archetype", fake_build)
+    scored = pd.DataFrame([
+        {"source": "comstock", "keep": True, "rate_class": "G-2", "archetype": "warehouse",
+         "sqft": 1.0, "loc_id": "L", "town_id": 160},
+        {"source": "comstock", "keep": True, "rate_class": "G-2", "archetype": "warehouse",
+         "sqft": 1.0, "loc_id": "W", "town_id": 348},
+    ])
+
+    calibration.bottom_up_monthly(scored)
+
+    assert seen == ["G2500170", "G2500270"]

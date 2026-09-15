@@ -148,7 +148,7 @@ COARSE_REASON = "coarse_use_code"
 FALLBACK_REASON = "floor_area_from_roofprint"
 
 OUTPUT_COLUMNS: tuple[str, ...] = (
-    "loc_id", "prop_id", "use_code", "use_desc", "archetype", "source",
+    "loc_id", "town_id", "prop_id", "use_code", "use_desc", "archetype", "source",
     "icp_sector", "sqft", "sqft_source", "stories", "year_built", "owner",
     "site_addr", "city", "zip", "zoning", "assess_fy", "record_count",
     "owner_count", "confidence", "confidence_reasons", "multi_use", "multi_meter",
@@ -208,23 +208,31 @@ def _text(series: pd.Series) -> pd.Series:
 
 
 def _use_code(series: pd.Series) -> pd.Series:
-    """Use codes are strings: Worcester has `942C` and `995` alongside `3400`."""
-    return series.astype("string").str.strip().fillna("")
+    """Use codes as strings, in the crosswalk's four-character form.
+
+    Worcester writes `3160`; Fall River writes the same Department of Revenue
+    code as `316`. A bare three-digit code is the DOR base code with no local
+    sub-code, so it gains a trailing zero. A fourth character is a local
+    sub-code -- `942C`, Lowell's `3401` -- and is left exactly as written.
+    """
+    out = series.astype("string").str.strip().fillna("")
+    three_digit = out.str.fullmatch(r"\d{3}").fillna(False)
+    return out.where(~three_digit, out + "0")
 
 
-def _crosswalk_frame(codes: Iterable[str]) -> pd.DataFrame:
+def _crosswalk_frame(codes: Iterable[str], town_id: int | str | None = None) -> pd.DataFrame:
     """One row per distinct use code, resolved through `crosswalk.archetype_for`.
 
     This iterates over distinct *codes* — 95 of them for Worcester — and never
     over parcels. The office family is left unresolved here because its band
     depends on floor area, which is only known after the collapse.
     """
-    rows = crosswalk.load()
+    rows = crosswalk.rows_for_town(town_id)
     records = []
     for code in sorted(set(codes)):
         cw = rows[code]
         office_family = cw.archetype == "office"
-        resolved = cw if office_family else crosswalk.archetype_for(code)
+        resolved = cw if office_family else crosswalk.archetype_for(code, town_id=town_id)
         records.append(
             {
                 "use_code": code,
@@ -365,9 +373,9 @@ def build_parcels(
 
     # --- coverage assertion, before anything can shrink silently ----------
     observed_codes = set(candidates["USE_CODE"].unique())
-    crosswalk.assert_covers(observed_codes)
+    crosswalk.assert_covers(observed_codes, town_id=town_id)
 
-    cw = _crosswalk_frame(observed_codes)
+    cw = _crosswalk_frame(observed_codes, town_id=town_id)
     candidates = candidates.merge(cw, left_on="USE_CODE", right_on="use_code", how="left")
 
     excluded_mask = candidates["excluded"].fillna(True).to_numpy(dtype=bool)
@@ -487,6 +495,9 @@ def build_parcels(
     out = pd.DataFrame(
         {
             "loc_id": parcels["LOC_ID"].astype("string"),
+            "town_id": pd.array(
+                [None if town_id is None else int(town_id)] * len(parcels), dtype="Int64"
+            ),
             "prop_id": parcels["PROP_ID"].astype("string"),
             "use_code": parcels["USE_CODE"].astype("string"),
             "use_desc": parcels["use_desc"].astype("string"),

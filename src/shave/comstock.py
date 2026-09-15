@@ -36,6 +36,10 @@ from .billing_window import billed_mask, offpeak_mask
 # Worcester County, FIPS 25027, in NHGIS GISJOIN form.
 WORCESTER_COUNTY_GISJOIN = "G2500270"
 
+#: Every Massachusetts county, FIPS 25001-25027 (odd codes), in GISJOIN form.
+#: `build_archetype` pools them when a county has no building of a type.
+MA_COUNTY_GISJOINS: tuple[str, ...] = tuple(f"G250{fips:03d}0" for fips in range(1, 28, 2))
+
 # ComStock reports energy consumed during each interval, in kWh. Average power
 # over the interval is energy divided by duration.
 KWH_PER_INTERVAL_TO_KW = 60.0 / INTERVAL_MINUTES
@@ -477,9 +481,18 @@ def build_archetype(
         conn = connect()
         try:
             index = load_county_index(county_gisjoin, conn=conn)
-            rep = select_representative(
-                index, ARCHETYPE_TO_COMSTOCK[archetype_name], conn=conn
-            )
+            comstock_type = ARCHETYPE_TO_COMSTOCK[archetype_name]
+            if not (index["building_type"] == comstock_type).any():
+                # Bristol and Middlesex County have no ComStock hospital at all.
+                # Pool every Massachusetts county rather than borrowing one
+                # neighbour's; select_representative then marks the thin
+                # statewide cohort (10 distinct hospitals: building 147959 is
+                # indexed in two counties) as widened, and the row says so.
+                index = pd.concat(
+                    [load_county_index(g, conn=conn) for g in MA_COUNTY_GISJOINS],
+                    ignore_index=True,
+                ).drop_duplicates("bldg_id")
+            rep = select_representative(index, comstock_type, conn=conn)
             profile = reduce_timeseries(rep.bldg_id, conn=conn, sqft=rep.sqft)
         finally:
             conn.close()

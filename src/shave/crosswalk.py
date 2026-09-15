@@ -79,6 +79,12 @@ class CrosswalkRow:
     #: parcel-level estimate for such a building is an aggregate that nobody is
     #: billed for -- and it is always an overstatement, never an understatement.
     multi_meter: bool = False
+    #: Blank for the statewide Department of Revenue meaning of the code. A
+    #: town id when that municipality uses the code for something of its own:
+    #: Lowell's fourth character is a local sub-code, and the 970-999 range is
+    #: assigned locally (Worcester's 9760 is its redevelopment authority, Fall
+    #: River's is a library). A town's row wins for that town and no other.
+    town_id: str = ""
 
     @property
     def excluded(self) -> bool:
@@ -112,21 +118,38 @@ def _parse_flag(raw: object, column: str, where: str) -> bool:
     return _FLAG_VALUES[text.lower()]
 
 
+#: Town rows per crosswalk file, filled by `load` as it parses. Kept beside the
+#: cached statewide dict so existing callers of `load()` see exactly what they
+#: always have.
+_TOWN_ROWS: dict[Path, dict[tuple[str, str], CrosswalkRow]] = {}
+
+
 @lru_cache(maxsize=1)
 def load(path: Path | None = None) -> dict[str, CrosswalkRow]:
-    """Read and validate the crosswalk. Cached; call `load.cache_clear()` in tests."""
-    src = path or CROSSWALK_PATH
+    """Read and validate the crosswalk; return its STATEWIDE rows.
+
+    Town rows are validated too and made available through `rows_for_town`.
+    Cached; call `load.cache_clear()` in tests.
+    """
+    src = Path(path) if path is not None else CROSSWALK_PATH
     if not src.exists():
         raise CrosswalkError(f"crosswalk not found at {src}")
 
-    rows: dict[str, CrosswalkRow] = {}
+    statewide: dict[str, CrosswalkRow] = {}
+    town_rows: dict[tuple[str, str], CrosswalkRow] = {}
     with src.open(newline="", encoding="utf-8") as fh:
         for lineno, raw in enumerate(csv.DictReader(fh), start=2):
             code = (raw.get("use_code") or "").strip()
             if not code:
                 raise CrosswalkError(f"{src}:{lineno} blank use_code")
-            if code in rows:
-                raise CrosswalkError(f"{src}:{lineno} duplicate use_code {code!r}")
+            town = (raw.get("town_id") or "").strip()
+            if town and not town.isdigit():
+                raise CrosswalkError(f"{src}:{lineno} town_id must be a number, got {town!r}")
+            if (town and (town, code) in town_rows) or (not town and code in statewide):
+                raise CrosswalkError(
+                    f"{src}:{lineno} duplicate use_code {code!r}"
+                    + (f" for town {town}" if town else "")
+                )
 
             row = CrosswalkRow(
                 use_code=code,
@@ -139,13 +162,31 @@ def load(path: Path | None = None) -> dict[str, CrosswalkRow]:
                 multi_meter=_parse_flag(
                     raw.get("multi_meter"), "multi_meter", f"{src.name}:{lineno} ({code})"
                 ),
+                town_id=town,
             )
             _validate_row(row, src, lineno)
-            rows[code] = row
+            if town:
+                town_rows[(town, code)] = row
+            else:
+                statewide[code] = row
 
-    if not rows:
+    if not statewide and not town_rows:
         raise CrosswalkError(f"{src} has no rows")
-    return rows
+    _TOWN_ROWS[src] = town_rows
+    return statewide
+
+
+def rows_for_town(
+    town_id: int | str | None = None, path: Path | None = None
+) -> dict[str, CrosswalkRow]:
+    """Statewide rows with one town's own rows laid over them."""
+    statewide = load(path)
+    if town_id is None:
+        return statewide
+    tid = str(int(town_id))
+    src = Path(path) if path is not None else CROSSWALK_PATH
+    local = {code: row for (town, code), row in _TOWN_ROWS.get(src, {}).items() if town == tid}
+    return {**statewide, **local}
 
 
 def _validate_row(row: CrosswalkRow, src: Path, lineno: int) -> None:
@@ -193,13 +234,13 @@ def resolve_office_band(sqft: float) -> str:
     return "large_office"
 
 
-def archetype_for(use_code: str, sqft: float | None = None) -> CrosswalkRow | None:
+def archetype_for(use_code: str, sqft: float | None = None, town_id: int | str | None = None) -> CrosswalkRow | None:
     """The crosswalk row for a use code, or None if the code is excluded.
 
     Raises if the code is absent entirely, which is a data-coverage bug rather
     than a scoring decision.
     """
-    rows = load()
+    rows = rows_for_town(town_id)
     code = str(use_code).strip()
     if code not in rows:
         raise CrosswalkError(
@@ -216,13 +257,13 @@ def archetype_for(use_code: str, sqft: float | None = None) -> CrosswalkRow | No
     return row
 
 
-def assert_covers(use_codes: set[str]) -> None:
+def assert_covers(use_codes: set[str], town_id: int | str | None = None) -> None:
     """Every use code observed in real data has a row. Call this at ingest.
 
     Without it a code the crosswalk has never seen silently produces no row,
     the parcel drops out, and the universe quietly shrinks with no error.
     """
-    rows = load()
+    rows = rows_for_town(town_id)
     missing = {c for c in (str(c).strip() for c in use_codes) if c and c not in rows}
     if missing:
         raise CrosswalkError(
@@ -232,11 +273,15 @@ def assert_covers(use_codes: set[str]) -> None:
 
 
 def coverage_summary() -> dict[str, int]:
-    rows = load()
+    """Counts over every row in the file, town rows included."""
+    statewide = load()
+    town_rows = list(_TOWN_ROWS.get(CROSSWALK_PATH, {}).values())
+    rows = list(statewide.values()) + town_rows
     return {
         "total": len(rows),
-        "comstock": sum(1 for r in rows.values() if r.source == "comstock"),
-        "modeled": sum(1 for r in rows.values() if r.source == "modeled"),
-        "excluded": sum(1 for r in rows.values() if r.excluded),
-        "collapse_points": sum(1 for r in rows.values() if r.is_collapse_point),
+        "comstock": sum(1 for r in rows if r.source == "comstock"),
+        "modeled": sum(1 for r in rows if r.source == "modeled"),
+        "excluded": sum(1 for r in rows if r.excluded),
+        "collapse_points": sum(1 for r in rows if r.is_collapse_point),
+        "town_overrides": len(town_rows),
     }
