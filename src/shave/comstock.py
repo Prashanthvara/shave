@@ -486,7 +486,8 @@ def build_archetype(
                 # Bristol and Middlesex County have no ComStock hospital at all.
                 # Pool every Massachusetts county rather than borrowing one
                 # neighbour's; select_representative then marks the thin
-                # statewide cohort (11 hospitals) as widened, and the row says so.
+                # statewide cohort (10 distinct hospitals: building 147959 is
+                # indexed in two counties) as widened, and the row says so.
                 index = pd.concat(
                     [load_county_index(g, conn=conn) for g in MA_COUNTY_GISJOINS],
                     ignore_index=True,

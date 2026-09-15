@@ -271,3 +271,16 @@ def test_the_default_factory_asks_comstock_for_the_parcels_own_county(monkeypatc
     with pytest.raises(comstock.ComStockError):
         pipeline.default_archetype_factory(base)
     assert seen["county"] == "G2500270", "no town means Worcester, as before towns existed"
+
+
+def test_scored_rows_carry_the_parcels_town():
+    gdf = pd.DataFrame([
+        {"loc_id": "L1", "sqft": 30_000.0, "archetype": "warehouse", "source": "comstock",
+         "confidence": "HIGH", "town_id": 160},
+        {"loc_id": "L2", "sqft": None, "archetype": "warehouse", "source": "comstock", "town_id": 95},
+    ])
+
+    out = pipeline.score_parcels(gdf, archetype_factory=lambda p: _flat_archetype(100.0)).set_index("loc_id")
+
+    assert out.loc["L1", "town_id"] == 160
+    assert out.loc["L2", "town_id"] == 95, "an unscored row keeps its town too"
