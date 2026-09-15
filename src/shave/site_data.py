@@ -163,6 +163,8 @@ def enrich(
     # reports R-squared and one that says "not yet run" while the figures sit
     # in the very payload it was handed.
     payload["method"] = method.method_payload(
-        scored, regression=export_payload.get("regression")
+        scored,
+        regression=export_payload.get("regression"),
+        calibration=export_payload.get("calibration"),
     )
     return payload

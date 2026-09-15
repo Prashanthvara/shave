@@ -239,6 +239,61 @@ export function drawerHTML(row, flagMeanings, dayAxis, sitingRule) {
   );
 }
 
+// The MECOLS class-shape check. Every figure, including the percentage and both
+// normalised shapes, arrives from calibration.py; this only lays them out.
+function calShapeSVG(rate, r) {
+  const w = 240;
+  const h = 60;
+  const x = (i) => (4 + (i / 11) * (w - 8)).toFixed(1);
+  const y = (v) => (h - 4 - (Number(v) || 0) * (h - 8)).toFixed(1);
+  const line = (vals) => (vals || []).map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  return (
+    `<figure class="calshape"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" ` +
+    `aria-label="${esc(rate)}: monthly billed peak, this tool against MECOLS, each ` +
+    `normalised to its own annual maximum.">` +
+    `<polyline points="${line(r.peak_shape_mecols)}" fill="none" stroke="var(--ink-3)" ` +
+    `stroke-width="1.1" stroke-dasharray="3 2"/>` +
+    `<polyline points="${line(r.peak_shape_ours)}" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/>` +
+    `</svg><figcaption class="eyebrow">${esc(rate)} &middot; solid = this tool &middot; ` +
+    `dashed = MECOLS</figcaption></figure>`
+  );
+}
+
+export function calibrationHTML(cal) {
+  if (!cal || cal.status || !cal.by_rate) {
+    return (
+      `<p>${esc((cal && cal.status) ||
+        "The class-shape check has not been run. Its result is unreported, not failed.")}</p>`
+    );
+  }
+  const c = cal.criterion || {};
+  const rates = Object.keys(cal.by_rate);
+  const rows = rates
+    .map((rate) => {
+      const r = cal.by_rate[rate];
+      return (
+        `<tr><td>${esc(rate)}</td><td class="v r">${esc(r.n_parcels)}</td>` +
+        `<td class="v r">${esc(r.months_hour_ok)} of 12</td>` +
+        `<td class="v r">${esc(r.months_load_factor_ok)} of 12</td>` +
+        `<td>${r.passes ? "Passes" : "Does not pass"}</td></tr>`
+      );
+    })
+    .join("");
+  return (
+    `<p>The ComStock-backed rows, summed by rate class, against National Grid's ` +
+    `published class average load shapes for ${esc(cal.year)}. Declared before the ` +
+    `first run: hour of the monthly billed peak within &plusmn;${esc(c.hour_tolerance_h)} h ` +
+    `in at least ${esc(c.months_required)} of 12 months, and monthly load factor within ` +
+    `&plusmn;${esc(c.load_factor_tolerance_pct)}% in all 12. A modest sanity check, ` +
+    `not validation.</p>` +
+    `<div class="tablewrap"><table class="assum"><thead><tr><th>Rate</th>` +
+    `<th class="r">Parcels</th><th class="r">Hour of peak</th>` +
+    `<th class="r">Load factor</th><th>Result</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div>` +
+    rates.map((rate) => calShapeSVG(rate, cal.by_rate[rate])).join("")
+  );
+}
+
 export function methodHTML(payload) {
   const cov = payload.coverage || {};
   const occ = payload.occupants || {};
@@ -318,6 +373,8 @@ export function methodHTML(payload) {
     `sweet spot &mdash; the expensive G-2 rate plus a spiky shape.</p>` +
     `<h2 style="margin-top:16px">Does the archetype layer earn its place?</h2>` +
     regressionBlock +
+    `<h2 style="margin-top:16px">Does the aggregate look like National Grid's classes?</h2>` +
+    calibrationHTML(payload.calibration) +
     `<h2 style="margin-top:16px">Every assumption, and where it came from</h2>` +
     `<p style="margin-bottom:8px">This table is rendered from the same file the ` +
     `scorer imports, so the published numbers cannot drift from the computed ones.</p>` +

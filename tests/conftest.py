@@ -22,6 +22,14 @@ WORCESTER_TOWN_ID = 348
 HAS_WORCESTER = (WORCESTER_DIR / "M348TaxPar_CY26_FY26.shp").exists()
 STRUCTURES_PATH = Path("data/raw/M348_STRUCTURES/structures_poly_348.shp")
 HAS_STRUCTURES = STRUCTURES_PATH.exists()
+MECOLS_PATH = Path("data/raw/mecols/MECOLS.xlsx")
+
+
+@pytest.fixture(scope="session")
+def mecols_path():
+    if not MECOLS_PATH.exists():
+        pytest.skip("MECOLS.xlsx not present (data/raw is gitignored); run scripts/fetch_mecols.py")
+    return MECOLS_PATH
 
 
 @pytest.fixture(scope="session")

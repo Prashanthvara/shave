@@ -146,3 +146,19 @@ def test_run_without_the_workbook_reports_unrun_not_failed(tmp_path):
     out = calibration.run(pd.DataFrame(), mecols_path=tmp_path / "absent.xlsx")
     assert "status" in out
     assert "not failed" in out["status"]
+
+
+def test_the_real_check_reports_both_rates_over_twelve_months(worcester_scored, mecols_path):
+    """Structure only. The verdict is published, never asserted: a test that
+    required a pass would be a threshold tuned after the fact."""
+    out = calibration.run(worcester_scored, mecols_path=mecols_path)
+
+    assert out["year"] == 2025
+    assert set(out["by_rate"]) == {"G-2", "G-3"}
+    assert out["by_rate"]["G-2"]["n_parcels"] == 380
+    assert out["by_rate"]["G-3"]["n_parcels"] == 148
+    for rate in ("G-2", "G-3"):
+        r = out["by_rate"][rate]
+        assert len(r["peak_hour_ours"]) == len(r["load_factor_mecols"]) == 12
+        assert isinstance(r["passes"], bool)
+    json.dumps(out)

@@ -302,3 +302,15 @@ def test_every_exported_row_carries_its_siting_result(worcester_parcels, worcest
     assert walmart["wall_facing"] == "SW"
     screened = [r for r in rows.values() if r["siting"] == "screened_out"]
     assert 1 <= len(screened) <= 20
+
+
+def test_enrich_carries_the_calibration_the_build_ran():
+    payload = {"schema_version": "1.5.0", "counts": {},
+               "calibration": {"year": 2025, "by_rate": {"G-2": {"passes": False}}},
+               "lists": {"comstock": [{"loc_id": "L1", "rank": 1,
+                                       "monthly_billed_demand_kw": [1.0] * 12,
+                                       "monthly_shaveable_kw": [1.0] * 12}], "modeled": []}}
+
+    out = site_data.enrich(payload, _scored_stub())
+
+    assert out["method"]["calibration"]["by_rate"]["G-2"]["passes"] is False

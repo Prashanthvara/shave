@@ -229,3 +229,8 @@ button.hit:hover{border-color:var(--rule-strong)}
 .wall.on{visibility:visible}
 .legend .sw-wall{height:3px; vertical-align:3px; border-radius:0;
   background:repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 4px)}
+
+/* ---------- calibration ---------- */
+.calshape{display:inline-block; margin:8px 16px 0 0}
+.calshape svg{display:block; max-width:100%; height:auto}
+.calshape figcaption{margin-top:2px}

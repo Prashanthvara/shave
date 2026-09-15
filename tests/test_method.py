@@ -149,3 +149,19 @@ def test_the_method_page_says_what_the_address_box_searches():
     text = stated["address_box_is_the_screen_only"].lower()
     assert "residential" in text
     assert "not screened" in text
+
+
+def test_the_class_shape_check_is_a_stated_limitation_not_a_gap():
+    gaps = {g.key for g in method.KNOWN_GAPS}
+    assert "no_class_shape_check" not in gaps
+    stated = {l.key: l.statement for l in method.LIMITATIONS}
+    assert "class_shape_check_is_modest" in stated, sorted(stated)
+    text = stated["class_shape_check_is_modest"].lower()
+    for words in ("not validation", "2018", "modelled"):
+        assert words in text, words
+
+
+def test_the_method_payload_carries_the_calibration_it_was_given():
+    payload = method.method_payload(_fake_scored(), calibration={"year": 2025, "by_rate": {}})
+    assert payload["calibration"] == {"year": 2025, "by_rate": {}}
+    assert "status" in method.method_payload(_fake_scored())["calibration"]
