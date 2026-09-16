@@ -22,7 +22,8 @@ from shave import towns
 from shave.assumptions import published_rows
 
 #: Bump the MINOR for an added field, the MAJOR for a removed or retyped one.
-#: `docs/ranked-json-schema.md` is the written contract; change both together.
+#: The payload `build_export` returns below is the contract: a reader wanting
+#: the field list should read it there rather than trust a second copy.
 SCHEMA_VERSION = "1.5.0"
 
 #: Rows per list. Cloudflare caps a Pages asset at 25 MiB and the page has to

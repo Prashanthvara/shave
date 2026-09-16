@@ -54,9 +54,11 @@ def main(argv: list[str] | None = None) -> int:
     payload = export.build_export(scored, parcels, town=town, top_n=args.top_n)
 
     report = regression.run(scored)
-    Path("docs/regression.md").write_text(
-        regression.render_markdown(report), encoding="utf-8"
-    )
+    # docs/ is a local working directory, not tracked, so a fresh clone does
+    # not have it. Create it rather than crashing after the pipeline has run.
+    regression_path = Path("docs/regression.md")
+    regression_path.parent.mkdir(parents=True, exist_ok=True)
+    regression_path.write_text(regression.render_markdown(report), encoding="utf-8")
     payload["regression"] = report
     path = export.write_export(payload, args.out)
     print("regression:",

@@ -42,3 +42,4 @@ node_modules/
 .wrangler/
 public/data/
 public/ranked.json
+docs/
