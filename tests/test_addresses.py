@@ -121,3 +121,13 @@ def test_every_exported_worcester_row_is_found_by_its_own_address(
         for field in ("sqft", "avg_12mo_kw", "annual_savings_usd"):
             v = e[field]
             assert v is None or not (isinstance(v, float) and math.isnan(v))
+
+
+def test_each_entry_names_its_town_by_slug():
+    parcels, scored, lists = _frames()
+    parcels = parcels.assign(town_id=[160, 160, 95, 348, 348])
+
+    index = addresses.build_index(parcels, scored, lists, towns=["WORCESTER", "FALL RIVER", "LOWELL"])
+    by_id = {e["loc_id"]: e["town"] for e in index["entries"]}
+
+    assert by_id == {"A": "lowell", "B": "lowell", "C": "fall-river", "D": "worcester"}

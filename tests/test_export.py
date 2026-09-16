@@ -173,3 +173,45 @@ def test_a_row_that_is_both_top_by_dollars_and_sweet_spot_appears_once():
                                   top_n=50)
     ids = [r["loc_id"] for r in payload["lists"]["comstock"]]
     assert ids == ["A", "B"], f"duplicate or reordered: {ids}"
+
+
+def test_the_reason_names_the_county_the_shape_actually_came_from():
+    """Fall River is Bristol and Lowell is Middlesex. A sentence that says
+    Worcester County for all three is a false provenance claim on a published
+    page, which is the one thing the method page exists to prevent."""
+    base = {
+        "sqft": 100000.0, "use_desc": "Shopping Centers / Malls",
+        "archetype": "strip_mall", "rate_class": "G-3",
+        "demand_charge_per_kw": 10.48, "avg_12mo_kw": 500.0, "peak_kw": 700.0,
+        "monthly_shaveable_kw": [100.0] * 12, "annual_savings_usd": 12000.0,
+        "source": "comstock", "flags": [],
+    }
+    assert "Worcester County" in export.reason_sentence({**base, "town_id": 348})
+    assert "Bristol County" in export.reason_sentence({**base, "town_id": 95})
+    assert "Middlesex County" in export.reason_sentence({**base, "town_id": 160})
+
+
+def test_a_widened_cohort_says_massachusetts_not_a_county():
+    """When no county cohort existed the profile was pooled statewide, so
+    naming that row's own county would claim a locality it does not have."""
+    row = {
+        "sqft": 100000.0, "use_desc": "Private Hospitals", "archetype": "hospital",
+        "rate_class": "G-3", "demand_charge_per_kw": 10.48, "avg_12mo_kw": 500.0,
+        "peak_kw": 700.0, "monthly_shaveable_kw": [100.0] * 12,
+        "annual_savings_usd": 12000.0, "source": "comstock",
+        "town_id": 95, "flags": ["thin_cohort"],
+    }
+    sentence = export.reason_sentence(row)
+    assert "Massachusetts" in sentence
+    assert "County" not in sentence
+
+
+def test_a_modelled_row_claims_no_county_at_all():
+    row = {
+        "sqft": 100000.0, "use_desc": "Machine Shops", "archetype": "machine_shop",
+        "rate_class": "G-2", "demand_charge_per_kw": 15.06, "avg_12mo_kw": 100.0,
+        "peak_kw": 300.0, "monthly_shaveable_kw": [50.0] * 12,
+        "annual_savings_usd": 9000.0, "source": "modeled",
+        "town_id": 160, "flags": [],
+    }
+    assert "County" not in export.reason_sentence(row)

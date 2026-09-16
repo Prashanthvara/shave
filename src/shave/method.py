@@ -182,18 +182,22 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "billed day, ComStock's weather year is 2018 and the class shapes are a "
         "later year, and it says nothing about the modelled industrial rows.",
     ),
+    Limitation(
+        "three_towns_not_the_design_docs_three",
+        "Three municipalities: Worcester, Fall River and Lowell. The design doc "
+        "named New Bedford and Chicopee alongside Worcester, but MassGIS's "
+        "electricity-provider layer lists New Bedford as Eversource and Chicopee "
+        "as a municipal light plant, so National Grid's G-2/G-3 tariff never "
+        "applies there. Fall River and Lowell, both National Grid mill cities, "
+        "replace them. Each town's figures come from its own assessor extract, "
+        "and the assessor year is shown per town.",
+    ),
 )
 
 
 #: Gaps that are real and unbuilt. Naming them is cheaper than being caught by
 #: them, and a reader who finds an unnamed gap stops trusting the named ones.
 KNOWN_GAPS: tuple[Limitation, ...] = (
-    Limitation(
-        "one_municipality",
-        "Worcester only. The pipeline is municipality-parameterised and the "
-        "method extends statewide, but only one town's assessor extract has "
-        "been processed.",
-    ),
     Limitation(
         "occupant_resolution_partial",
         "Only part of the head of the ranking has had its operating business "
@@ -242,7 +246,7 @@ FLAG_MEANINGS: dict[str, str] = {
 
 
 def method_payload(
-    scored: pd.DataFrame, regression: dict | None = None, calibration: dict | None = None
+    scored: pd.DataFrame, regression: dict | None = None, calibration: dict | None = None, towns: list[dict] | None = None
 ) -> dict[str, object]:
     """Everything the method page renders, computed from this run.
 
@@ -311,4 +315,5 @@ def method_payload(
         "calibration": calibration
         if calibration is not None
         else {"status": "not yet run; the result is unreported, not failed"},
+        "towns": list(towns or []),
     }

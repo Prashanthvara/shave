@@ -165,3 +165,17 @@ def test_the_method_payload_carries_the_calibration_it_was_given():
     payload = method.method_payload(_fake_scored(), calibration={"year": 2025, "by_rate": {}})
     assert payload["calibration"] == {"year": 2025, "by_rate": {}}
     assert "status" in method.method_payload(_fake_scored())["calibration"]
+
+
+def test_the_method_page_states_the_town_swap_and_why():
+    assert "one_municipality" not in {g.key for g in method.KNOWN_GAPS}
+    stated = {l.key: l.statement for l in method.LIMITATIONS}
+    text = stated["three_towns_not_the_design_docs_three"]
+    for words in ("Fall River", "Lowell", "New Bedford", "Chicopee", "Eversource", "municipal light plant"):
+        assert words in text, words
+
+
+def test_the_method_payload_carries_the_towns_it_was_given():
+    towns = [{"town_id": 348, "name": "Worcester", "slug": "worcester", "assess_fy": 2026, "counts": {}}]
+    assert method.method_payload(_fake_scored(), towns=towns)["towns"] == towns
+    assert method.method_payload(_fake_scored())["towns"] == []

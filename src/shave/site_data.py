@@ -30,10 +30,9 @@ from shave.assumptions import (
     PEAK_HOUR_START,
 )
 
-#: Bumped when the page's contract changes. The page refuses to render a
-#: payload whose major version it does not recognise, so a stale deploy fails
-#: loudly instead of drawing wrong numbers.
-SITE_SCHEMA_VERSION = "1.0.0"
+#: 2.0.0: the page loads index.json, then one ranked payload per town. A 1.x
+#: page cannot read that layout, so it must refuse rather than draw nothing.
+SITE_SCHEMA_VERSION = "2.0.0"
 
 #: What this module adds on top of an exported row.
 ADDED_ROW_FIELDS: tuple[str, ...] = (
