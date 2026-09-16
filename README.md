@@ -3,9 +3,13 @@
 **https://shave.pjayav.workers.dev**
 
 
-Ranks Massachusetts commercial and industrial buildings by how much of their
-monthly billed electrical demand a 250 kW / 522 kWh battery could actually
-absorb, and what that saves at the filed tariff rate.
+Ranks commercial and industrial buildings in Worcester, Fall River and Lowell
+by how much of their monthly billed electrical demand a 250 kW / 522 kWh
+battery could actually absorb, and what that saves at the filed tariff rate.
+
+All three are National Grid (Massachusetts Electric) territory, which the
+G-2/G-3 tariff requires. `data/town_utilities.csv` is the checkable record.
+4,179 parcels screened, 1,450 with enough demand charge to be worth a call.
 
 It scores sites **before** anyone picks up the phone. The industry sequence is
 talk, then ask for a utility bill, then decide. This inverts that.
@@ -97,10 +101,21 @@ uv run pytest
 
 ### Rebuilding the published page
 
-    uv run python scripts/build_site.py     # pipeline -> public/data/*.json
+    uv run python scripts/build_site.py     # every covered town, about 60 s
     NB="$HOME/.nvm/versions/node/v22.18.0/bin"
     "$NB/npx" wrangler dev                  # serve it locally on :8787
     "$NB/npx" wrangler deploy               # publish
+
+It writes, under `public/data`:
+
+    index.json                   the towns, their counts, and the default
+    towns/<slug>/ranked.json     one enriched export per town, in its own map frame
+    method.json                  one method payload over all towns
+    addresses.json               one address index over all towns
+
+The page loads `index.json` first, then one town at a time. Towns are never
+merged into a single ranked list, for the same reason the two source lists are
+not: each town ranks within itself and draws its own map frame.
 
 `data/raw/` holds the MassGIS L3 extract and is gitignored, so a fresh clone
 must download it before the pipeline will run. `data/interim/comstock/` is the
@@ -108,8 +123,9 @@ cached ComStock profile per archetype; delete it and
 `scripts/warm_comstock_cache.py` refetches from S3, about six minutes.
 
 `node`, `npm` and `npx` are nvm shell functions here, so `export PATH` does not
-reach them — a shell function takes precedence over a PATH lookup. Call the
+reach them, because a shell function takes precedence over a PATH lookup. Call the
 binaries by absolute path, as above.
 
-The full test suite takes about five minutes: several integration tests re-run
-the whole 2,099-parcel pipeline end to end rather than working from fixtures.
+The full test suite takes about 75 seconds: several integration tests re-run
+the whole 4,179-parcel pipeline end to end rather than working from fixtures.
+Each town is scored once per session and shared (`tests/conftest.py`).
