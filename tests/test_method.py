@@ -179,3 +179,31 @@ def test_the_method_payload_carries_the_towns_it_was_given():
     towns = [{"town_id": 348, "name": "Worcester", "slug": "worcester", "assess_fy": 2026, "counts": {}}]
     assert method.method_payload(_fake_scored(), towns=towns)["towns"] == towns
     assert method.method_payload(_fake_scored())["towns"] == []
+
+
+def test_the_method_page_describes_the_occupant_pipeline_without_overclaiming(
+    worcester_scored,
+):
+    """The agent drafts and a person verifies. A reader who cannot see that
+    split cannot judge what the occupant column is worth. It must also not
+    claim any row has been through the agent until one has."""
+    payload = method.method_payload(worcester_scored)
+    text = " ".join(
+        item["statement"]
+        for key in ("limitations", "known_gaps")
+        for item in payload[key]
+    )
+    assert "drafted by an agent" in text
+    assert "initialled" in text or "initials" in text
+    # The published figure is the real one, never the mechanism's promise.
+    assert "published only after" not in text
+
+
+def test_the_method_page_says_the_reason_sentence_is_templated(worcester_scored):
+    payload = method.method_payload(worcester_scored)
+    text = " ".join(
+        item["statement"]
+        for key in ("limitations", "known_gaps")
+        for item in payload[key]
+    )
+    assert "templated" in text
