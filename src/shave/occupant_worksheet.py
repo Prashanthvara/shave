@@ -100,6 +100,44 @@ def write_worksheet(rows: pd.DataFrame, path: Path | str = CANDIDATES_PATH) -> i
     return len(records)
 
 
+#: The only cells the agent may write. `status`, `reviewer` and `reviewer_note`
+#: belong to a person and are absent from this tuple on purpose: they are what
+#: `promote` reads to decide whether a row may be published.
+AGENT_FIELDS: tuple[str, ...] = ("candidate_occupant", "candidate_source", "evidence")
+
+
+def update_research(
+    path: Path | str, findings: dict[str, dict[str, str]]
+) -> int:
+    """Write drafted research into pending, unreviewed rows. Returns the count.
+
+    A person's judgment outranks a re-run, so a row that is verified or
+    rejected, or that anyone has initialled, is left exactly as it is even
+    when a finding is supplied for it. The agent can therefore be re-run over
+    the whole worksheet at any time without costing a reviewer their work.
+    """
+    path = Path(path)
+    rows = list(_read(path).values())
+    written = 0
+    for row in rows:
+        found = findings.get(row["loc_id"])
+        if found is None:
+            continue
+        if (row.get("status") or "").strip().lower() != "pending":
+            continue
+        if (row.get("reviewer") or "").strip():
+            continue
+        for field in AGENT_FIELDS:
+            row[field] = found.get(field, "")
+        written += 1
+
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(FIELDS))
+        writer.writeheader()
+        writer.writerows([{k: row.get(k, "") for k in FIELDS} for row in rows])
+    return written
+
+
 def promote(
     candidates_path: Path | str, occupants_path: Path | str, today: str
 ) -> int:

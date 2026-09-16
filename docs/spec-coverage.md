@@ -60,7 +60,7 @@ and browsable, which is success criterion 5.
 | # | Spec step | State |
 |---|---|---|
 | 10 | Address box, promoted to Stage 1 by D5 as "the verification moment" | ✅ static index over every screened parcel, no database. Loaded on first search. |
-| 11 | Agent enrichment over the top 50 | ❌ |
+| 11 | Agent enrichment over the top 50 | ⚠️ **split, see divergence 11** | Occupant resolution is built: `src/shave/occupant_agent.py` drafts one candidate per worksheet row behind a web search, and `occupant_worksheet.update_research` writes only the three research columns. Expansion signals, existing solar and the generated justification are declined, with the reason. |
 | 12 | Supabase/PostGIS + Worker API **"only if something actually needs it"** | ❌ **correctly.** Nothing needs it, and an outside review of the spec argued to cut the whole stack. The site is assets-only with no Worker script at all. |
 
 ---
@@ -179,6 +179,19 @@ as suitable.
 factor in 0 of 12 for G-2, and 7 of 12 and 0 of 12 for G-3, against a criterion declared before the first run. It is published as a finding: the
 aggregate sums each archetype's worst billed day, which a diversified class average does not, and the
 criterion was not loosened after the result was seen.
+
+---
+
+**11. The agent drafts occupant candidates; it does not write the reason sentence.** The spec's
+step 11 asks for occupant, owner, expansion signals, existing solar, and a written justification
+replacing the template. The occupant half is built and gated: the agent fills `candidate_occupant`,
+`candidate_source` and `evidence`, `AGENT_FIELDS` is disjoint from the fields `promote` reads, and a
+test holds that, so no name can reach `data/occupants.csv` without a reviewer's initials. A
+candidate whose source is not an openable URL is dropped and its reasoning kept. The other half is
+declined. A generated justification would read better than the template and would occasionally be
+wrong about arithmetic the page can prove, and unlike a name there is no verification step for
+prose. Expansion signals and existing solar are declined for the same reason: no source to check
+them against, and a published list is the wrong place to find out. The method page says so.
 
 ---
 

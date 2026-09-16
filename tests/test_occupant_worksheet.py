@@ -169,3 +169,96 @@ def test_a_capitalised_status_counts_and_a_mistyped_one_is_refused(tmp_path):
     with pytest.raises(occupants.OccupantError, match="verfied"):
         ow.promote(bad, occ, today="2026-09-20")
     assert occ.read_text(encoding="utf-8") == before
+
+
+# ---------------------------------------------------------------------------
+# update_research: the only writer of the agent's three columns.
+# ---------------------------------------------------------------------------
+
+def _worksheet(tmp_path, rows):
+    import csv
+
+    from shave import occupant_worksheet as ow
+
+    path = tmp_path / "candidates.csv"
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(ow.FIELDS))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in ow.FIELDS})
+    return path
+
+
+FINDING = {
+    "candidate_occupant": "Burlington",
+    "candidate_source": "https://www.burlington.com/stores/ma/fall-river/752",
+    "evidence": "Burlington's own store page gives that address.",
+}
+
+
+def test_update_research_fills_a_pending_row(tmp_path):
+    from shave import occupant_worksheet as ow
+
+    path = _worksheet(tmp_path, [{"loc_id": "A", "status": "pending"}])
+    assert ow.update_research(path, {"A": FINDING}) == 1
+
+    row = ow._read(path)["A"]
+    assert row["candidate_occupant"] == "Burlington"
+    assert row["status"] == "pending", "the agent must never set a status"
+    assert row["reviewer"] == ""
+
+
+def test_update_research_never_overwrites_a_reviewed_row(tmp_path):
+    """A person's judgment outranks a re-run. Verified and rejected rows, and
+    any row someone has initialled, are left exactly as they are."""
+    from shave import occupant_worksheet as ow
+
+    path = _worksheet(
+        tmp_path,
+        [
+            {"loc_id": "V", "status": "verified", "reviewer": "pj",
+             "candidate_occupant": "Checked Co"},
+            {"loc_id": "R", "status": "rejected", "reviewer": "pj",
+             "candidate_occupant": "Wrong Co"},
+            {"loc_id": "P", "status": "pending", "reviewer": "pj",
+             "candidate_occupant": "Looking Into It"},
+        ],
+    )
+    assert ow.update_research(path, {k: FINDING for k in ("V", "R", "P")}) == 0
+
+    rows = ow._read(path)
+    assert rows["V"]["candidate_occupant"] == "Checked Co"
+    assert rows["R"]["candidate_occupant"] == "Wrong Co"
+    assert rows["P"]["candidate_occupant"] == "Looking Into It"
+
+
+def test_update_research_leaves_rows_it_was_given_no_finding_for(tmp_path):
+    from shave import occupant_worksheet as ow
+
+    path = _worksheet(
+        tmp_path,
+        [{"loc_id": "A", "status": "pending"},
+         {"loc_id": "B", "status": "pending", "evidence": "already looked"}],
+    )
+    ow.update_research(path, {"A": FINDING})
+
+    rows = ow._read(path)
+    assert rows["A"]["candidate_occupant"] == "Burlington"
+    assert rows["B"]["evidence"] == "already looked"
+
+
+def test_update_research_keeps_the_column_order(tmp_path):
+    from shave import occupant_worksheet as ow
+
+    path = _worksheet(tmp_path, [{"loc_id": "A", "status": "pending"}])
+    ow.update_research(path, {"A": FINDING})
+    header = path.read_text(encoding="utf-8").splitlines()[0]
+    assert header == ",".join(ow.FIELDS)
+
+
+def test_the_agent_may_not_write_a_status_or_a_reviewer():
+    """A structural guarantee, not a convention: the fields the agent is
+    allowed to write cannot include the ones that gate promotion."""
+    from shave import occupant_worksheet as ow
+
+    assert set(ow.AGENT_FIELDS).isdisjoint({"status", "reviewer", "reviewer_note"})

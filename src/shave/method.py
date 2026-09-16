@@ -192,6 +192,16 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "replace them. Each town's figures come from its own assessor extract, "
         "and the assessor year is shown per town.",
     ),
+    Limitation(
+        "reason_sentences_are_templated",
+        "The sentence under each row is templated from the computed figures, "
+        "not written by a model. The design doc asked for a written "
+        "justification replacing the template. A generated sentence would read "
+        "better and would occasionally be wrong about arithmetic this page can "
+        "prove, and unlike an occupant name there is no verification step for "
+        "prose. The template states only what the scorer computed, which is "
+        "the claim the page can stand behind.",
+    ),
 )
 
 
@@ -201,9 +211,23 @@ KNOWN_GAPS: tuple[Limitation, ...] = (
     Limitation(
         "occupant_resolution_partial",
         "Only part of the head of the ranking has had its operating business "
-        "resolved by hand. The assessor's owner of record is a holding company "
+        "resolved. The assessor's owner of record is a holding company "
         "for roughly half the top 50, so an unresolved row shows no occupant "
-        "rather than showing the owner in its place.",
+        "rather than showing the owner in its place. The count above is the "
+        "number actually resolved today, not a target.",
+    ),
+    Limitation(
+        "occupant_candidates_are_drafted_then_verified",
+        "Occupant candidates are drafted by an agent and verified by a person "
+        "before anything is published. The agent runs one web-search-backed "
+        "request per row and writes three cells: a name, one source URL and "
+        "one sentence of evidence. It cannot set a row's status, so a "
+        "candidate reaches the published table only once a reviewer has "
+        "opened the source and initialled the row, and a candidate whose "
+        "source is not an openable URL is dropped rather than carried "
+        "forward. The drafted worksheet is committed at "
+        "data/occupant_candidates.csv, so the unverified research is as "
+        "browsable as the verified table.",
     ),
 )
 
