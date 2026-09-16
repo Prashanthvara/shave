@@ -46,6 +46,31 @@ export function sparkSVG(values, w, h) {
   );
 }
 
+// The towns the build produced, in the order it produced them. The first is
+// the default. Rendered here rather than baked into index.html so adding a
+// municipality is a build change and not an HTML edit.
+export function townButtonsHTML(towns, currentSlug) {
+  return (towns || [])
+    .map(
+      (t) =>
+        `<button type="button" data-slug="${esc(t.slug)}" ` +
+        `aria-pressed="${String(t.slug === currentSlug)}">${esc(t.name)}</button>`,
+    )
+    .join("");
+}
+
+// Every figure here was counted by the pipeline. The page only formats them.
+export function countsLine(counts) {
+  const c = counts || {};
+  const ex = c.exported || {};
+  return (
+    `${Number(c.parcels_in || 0).toLocaleString()} parcels screened · ` +
+    `${Number(c.kept || 0).toLocaleString()} in band · ` +
+    `${Number(c.sweet_spot || 0).toLocaleString()} in the sweet spot · ` +
+    `showing top ${ex.comstock} measured and ${ex.modeled} modelled`
+  );
+}
+
 // An unresolved row shows what the assessor actually recorded, never the
 // holding company dressed up as an occupant.
 function siteName(row) {

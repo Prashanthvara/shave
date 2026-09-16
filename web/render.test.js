@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   chipClass,
+  countsLine,
   daySVG,
   drawerHTML,
   fmtMoney,
   methodHTML,
   rowHTML,
   sparkSVG,
+  townButtonsHTML,
 } from "../public/app.js";
 
 const ROW = {
@@ -600,5 +602,46 @@ describe("methodHTML towns", () => {
     expect(prose).toContain("Worcester (assessor FY 2026)");
     expect(prose).toContain("Fall River (assessor FY 2026)");
     expect(prose).toContain("Lowell (assessor FY 2026)");
+  });
+});
+
+const TOWNS = [
+  { town_id: 348, name: "Worcester", slug: "worcester", assess_fy: 2026 },
+  { town_id: 95, name: "Fall River", slug: "fall-river", assess_fy: 2026 },
+  { town_id: 160, name: "Lowell", slug: "lowell", assess_fy: 2026 },
+];
+
+describe("townButtonsHTML", () => {
+  it("presses exactly the current town", () => {
+    const html = townButtonsHTML(TOWNS, "lowell");
+    expect(html).toContain('data-slug="lowell" aria-pressed="true"');
+    expect(html).toContain('data-slug="worcester" aria-pressed="false"');
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+  });
+
+  it("names every covered town", () => {
+    const html = townButtonsHTML(TOWNS, "worcester");
+    for (const t of TOWNS) expect(html).toContain(t.name);
+  });
+
+  it("escapes a town name rather than injecting it", () => {
+    const html = townButtonsHTML([{ name: "<script>", slug: "x" }], "x");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("countsLine", () => {
+  it("reads the counts block the build produced", () => {
+    const line = countsLine({
+      parcels_in: 2099,
+      kept: 737,
+      sweet_spot: 172,
+      exported: { comstock: 354, modeled: 209 },
+    });
+    expect(line).toContain("2,099 parcels screened");
+    expect(line).toContain("737 in band");
+    expect(line).toContain("172 in the sweet spot");
+    expect(line).toContain("top 354 measured and 209 modelled");
   });
 });
