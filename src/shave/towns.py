@@ -33,6 +33,10 @@ class Town:
     slug: str
     #: NHGIS GISJOIN of the county, the partition ComStock metadata uses.
     county_gisjoin: str
+    #: The county's plain name, for the published reason sentence. It has to
+    #: travel with the GISJOIN: a sentence naming a different county than the
+    #: one the profile was read from is a false provenance claim.
+    county: str
     #: MassGIS's file name for the L3 extract.
     l3_zip: str
     #: Where that extract unzips.
@@ -44,11 +48,11 @@ class Town:
 
 
 TOWNS: tuple[Town, ...] = (
-    Town(348, "Worcester", "worcester", "G2500270",
+    Town(348, "Worcester", "worcester", "G2500270", "Worcester",
          "L3_SHP_M348_WORCESTER.zip", "data/raw/M348_WORCESTER/L3_SHP_M348_Worcester"),
-    Town(95, "Fall River", "fall-river", "G2500050",
+    Town(95, "Fall River", "fall-river", "G2500050", "Bristol",
          "L3_SHP_M095_FALLRIVER.zip", "data/raw/M095_FALLRIVER/L3_SHP_M095_FallRiver"),
-    Town(160, "Lowell", "lowell", "G2500170",
+    Town(160, "Lowell", "lowell", "G2500170", "Middlesex",
          "L3_SHP_M160_LOWELL.zip", "data/raw/M160_LOWELL/L3_SHP_M160_Lowell"),
 )
 
@@ -61,6 +65,15 @@ def by_id(town_id) -> Town:
         if town.town_id == tid:
             return town
     raise KeyError(f"town {tid} is not covered; covered: {[t.town_id for t in TOWNS]}")
+
+
+def county_name_for(town_id) -> str:
+    """The county's plain name, for the published reason sentence. Mirrors
+    `county_for` so the sentence and the profile can never name different
+    counties."""
+    if town_id is None or pd.isna(town_id):
+        return by_id(DEFAULT_TOWN_ID).county
+    return by_id(town_id).county
 
 
 def county_for(town_id) -> str:

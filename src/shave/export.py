@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from shave import towns
 from shave.assumptions import published_rows
 
 #: Bump the MINOR for an added field, the MAJOR for a removed or retyped one.
@@ -47,16 +48,35 @@ PARCEL_FIELDS = (
     "lon", "lat",
 )
 
-_SOURCE_PHRASE = {
-    "comstock": (
+_MODELED_PHRASE = (
+    "modelled, not measured: a synthesised shift profile scaled to published "
+    "EIA electricity intensity"
+)
+
+
+def _source_phrase(row: dict) -> str:
+    """How this row's load shape was obtained, naming the cohort it came from.
+
+    The county is the row's own, not a constant: Fall River reads Bristol and
+    Lowell reads Middlesex, and a sentence that said Worcester for all three
+    would claim a provenance the code did not use. Where no county cohort
+    existed the profile was pooled statewide -- the `thin_cohort` flag -- so
+    naming that row's county would claim a locality the shape does not have.
+    """
+    source = row.get("source")
+    if source != "comstock":
+        # An unknown source falls back to its own name rather than a phrase
+        # that would describe a provenance we cannot vouch for.
+        return _MODELED_PHRASE if source == "modeled" else str(source)
+    where = (
+        "Massachusetts"
+        if "thin_cohort" in (row.get("flags") or [])
+        else f"{towns.county_name_for(row.get('town_id'))} County"
+    )
+    return (
         "measured, from the NREL ComStock building most typical of its type in "
-        "Worcester County by peak intensity"
-    ),
-    "modeled": (
-        "modelled, not measured: a synthesised shift profile scaled to published "
-        "EIA electricity intensity"
-    ),
-}
+        f"{where} by peak intensity"
+    )
 
 
 def reason_sentence(row: dict) -> str:
@@ -73,7 +93,7 @@ def reason_sentence(row: dict) -> str:
         f"at {row['peak_kw']:,.0f} kW; a 250 kW / 522 kWh Powerblock holds about "
         f"{shave:,.0f} kW off the billed peak in an average month, worth "
         f"${row['annual_savings_usd']:,.0f} a year in distribution demand charges "
-        f"alone. Load shape is {_SOURCE_PHRASE.get(row['source'], row['source'])}."
+        f"alone. Load shape is {_source_phrase(row)}."
     )
 
 
