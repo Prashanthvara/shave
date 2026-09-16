@@ -898,6 +898,19 @@ async function boot() {
       });
     }),
   );
+
+  const briefToggle = $("#brief-toggle");
+  const briefContent = $("#brief-content");
+  const briefHead = $("#brief-head");
+  if (briefToggle && briefContent) {
+    briefToggle.addEventListener("click", () => {
+      const isHidden = briefContent.hidden;
+      briefContent.hidden = !isHidden;
+      briefToggle.setAttribute("aria-expanded", String(isHidden));
+      briefToggle.textContent = isHidden ? "Hide brief" : "Show brief";
+      if (briefHead) briefHead.classList.toggle("collapsed", !isHidden);
+    });
+  }
 }
 
 if (typeof document !== "undefined" && document.getElementById("rows")) boot();

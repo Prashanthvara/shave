@@ -71,6 +71,26 @@ a{color:inherit}
 .tab[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--signal); font-weight:600}
 .tab:hover{color:var(--ink)}
 
+/* ---------- operator brief ---------- */
+.brief{margin-top:14px; background:var(--surface); border:1px solid var(--rule); border-radius:var(--r)}
+.brief-head{display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:9px 12px; border-bottom:1px solid var(--rule)}
+.brief-head.collapsed{border-bottom:0}
+.brief-toggle{appearance:none; background:var(--surface); border:1px solid var(--rule-strong);
+  border-radius:var(--r); font-family:var(--mono); font-size:10.5px; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--ink-2); padding:3px 8px; cursor:pointer}
+.brief-toggle:hover{color:var(--ink); border-color:var(--ink-2)}
+.brief-content{padding:12px 14px}
+.brief-lead{font-size:13.5px; font-weight:500; color:var(--ink); line-height:1.5; margin:0 0 6px; max-width:82ch}
+.brief-sub{font-size:13px; color:var(--ink-2); line-height:1.55; margin:0 0 12px; max-width:82ch}
+.brief-cols{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px;
+  padding-top:12px; border-top:1px solid var(--rule)}
+@media (max-width:900px){
+  .brief-cols{grid-template-columns:minmax(0,1fr); gap:12px}
+}
+.brief-col .eyebrow{display:block; margin-bottom:5px}
+.brief-col p{margin:0; font-size:12.5px; line-height:1.55; color:var(--ink-2)}
+
 /* ---------- toolbar ---------- */
 .toolbar{display:flex; gap:14px; align-items:center; flex-wrap:wrap;
   padding:10px 0; border-bottom:1px solid var(--rule)}

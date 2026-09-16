@@ -31,6 +31,43 @@
   </div>
 
   <section id="v-main" role="tabpanel" aria-labelledby="tab-main">
+    <div class="brief" id="brief">
+      <div class="brief-head" id="brief-head">
+        <span class="eyebrow">Orientation &middot; Outbound BESS Prospecting</span>
+        <button type="button" class="brief-toggle" id="brief-toggle" aria-expanded="true" aria-controls="brief-content">
+          Hide brief
+        </button>
+      </div>
+      <div class="brief-content" id="brief-content">
+        <p class="brief-lead">
+          A structured prior over Massachusetts commercial and industrial buildings to identify where a 250&nbsp;kW&nbsp;/ 522&nbsp;kWh battery captures meaningful demand-charge savings before requesting an electric bill.
+        </p>
+        <p class="brief-sub">
+          Ranked against National Grid&rsquo;s filed G-2 ($15.06/kW) and G-3 ($10.48/kW) distribution tariffs. Combines MassGIS assessor records, NREL ComStock 15-minute load profiles, and parcel-line exterior wall clearance to separate sharp, shaveable weekday peaks from unserviceable plateaus.
+        </p>
+        <div class="brief-cols">
+          <div class="brief-col">
+            <span class="eyebrow">The Inversion</span>
+            <p>
+              Commercial battery developers traditionally cold-call, request 12 months of utility interval bills, and evaluate feasibility after the fact. Shave inverts the sequence: it screens municipal assessor records and models load shapes to score demand-charge savings before dialing.
+            </p>
+          </div>
+          <div class="brief-col">
+            <span class="eyebrow">The Tariff &amp; Physics</span>
+            <p>
+              A 250&nbsp;kW&nbsp;/ 522&nbsp;kWh system (~413&nbsp;kWh usable) cannot hold down a 6-hour hospital plateau. It excels at sharp 1&ndash;2 hour weekday peaks on National Grid&rsquo;s G-2 tariff ($15.06/kW), which costs 44% more per kW than G-3 ($10.48/kW). Mid-size spiky loads beat large flat loads.
+            </p>
+          </div>
+          <div class="brief-col">
+            <span class="eyebrow">The Pipeline</span>
+            <p>
+              4,179 parcels screened across Worcester, Fall River, and Lowell. 15-minute load shapes from NREL ComStock and industrial models, root-found against filed billing windows (08:00&ndash;21:00 weekdays), filtered by physical exterior wall clearance (&ge;10&nbsp;ft).
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="toolbar">
       <div class="seg" role="group" aria-label="Profile source">
         <button id="src-cs" aria-pressed="true">ComStock&#8209;backed</button>
