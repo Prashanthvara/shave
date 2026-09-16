@@ -456,10 +456,11 @@ describe("lookup", () => {
 });
 
 describe("lookupHTML", () => {
-  it("says an uncovered town was not screened, which differs from screened out", () => {
+  it("says an uncovered town has not been processed, so there is no answer", () => {
     const html = lookupHTML(lookup(INDEX, "12 Main St, Springfield"), INDEX);
     expect(html).toContain("SPRINGFIELD");
-    expect(html).toMatch(/not been screened/);
+    expect(html).toMatch(/has not processed/);
+    expect(html).toMatch(/no answer for it/);
     expect(html).toContain("WORCESTER");
   });
 
@@ -573,12 +574,12 @@ describe("calibrationHTML", () => {
     expect(html).toContain("Passes");
     expect(html).toContain("Does not pass");
     expect(html).toContain("15%");
-    expect(html).toMatch(/not validation/);
+    expect(html).toMatch(/too weak to validate/);
   });
 
-  it("says an unrun check is unreported, not failed", () => {
-    const html = calibrationHTML({ status: "not run: file missing. The result is unreported, not failed." });
-    expect(html).toContain("unreported, not failed");
+  it("shows an unrun check's own status and draws no table", () => {
+    const html = calibrationHTML({ status: "not run: file missing, so there is no result to report" });
+    expect(html).toContain("no result to report");
     expect(html).not.toContain("<table");
   });
 

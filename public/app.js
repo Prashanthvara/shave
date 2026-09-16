@@ -260,7 +260,7 @@ export function drawerHTML(row, flagMeanings, dayAxis, sitingRule) {
     `<div class="lineage"><strong>How we got here:</strong> use description ` +
     `"${esc(row.use_desc)}" maps to the ${esc(row.archetype)} archetype, ` +
     `${esc(row.source)}-backed, scaled to ${Math.round(row.sqft).toLocaleString("en-US")} sq ft.` +
-    `${source} Estimated, never measured &mdash; get the utility bill before anyone signs.` +
+    `${source} An estimate from public records. Get the utility bill before anyone signs.` +
     `</div>`
   );
 }
@@ -289,7 +289,7 @@ export function calibrationHTML(cal) {
   if (!cal || cal.status || !cal.by_rate) {
     return (
       `<p>${esc((cal && cal.status) ||
-        "The class-shape check has not been run. Its result is unreported, not failed.")}</p>`
+        "The class-shape check has not been run, so there is no result to report yet.")}</p>`
     );
   }
   const c = cal.criterion || {};
@@ -310,8 +310,8 @@ export function calibrationHTML(cal) {
     `published class average load shapes for ${esc(cal.year)}. Declared before the ` +
     `first run: hour of the monthly billed peak within &plusmn;${esc(c.hour_tolerance_h)} h ` +
     `in at least ${esc(c.months_required)} of 12 months, and monthly load factor within ` +
-    `&plusmn;${esc(c.load_factor_tolerance_pct)}% in all 12. A modest sanity check, ` +
-    `not validation.</p>` +
+    `&plusmn;${esc(c.load_factor_tolerance_pct)}% in all 12. A modest sanity check, too ` +
+    `weak to validate the model.</p>` +
     `<div class="tablewrap"><table class="assum"><thead><tr><th>Rate</th>` +
     `<th class="r">Parcels</th><th class="r">Hour of peak</th>` +
     `<th class="r">Load factor</th><th>Result</th></tr></thead>` +
@@ -388,15 +388,16 @@ export function methodHTML(payload) {
 
   const prose =
     `<h2>What this is</h2>` +
-    `<p class="lead">A structured prior over three public assessor fields, not a ` +
-    `measurement. It orders a call list. It does not underwrite a project.</p>` +
+    `<p class="lead">A structured prior over three public assessor fields. Nothing ` +
+    `here has seen a meter, so it can order a call list and cannot underwrite a ` +
+    `project.</p>` +
     `<p>Demand is billed on the greatest fifteen-minute peak between 8 a.m. and ` +
     `9 p.m., Monday to Friday, excluding nine observed holidays. A three-in-the-` +
     `morning spike is free. Everything here is computed inside that window and ` +
     `nowhere else.</p>` +
     `<p>${esc(cov.parcels_total)} parcels screened; ${esc(cov.kept)} carry enough ` +
     `demand charge to be worth a conversation; ${esc(cov.sweet_spot)} sit in the ` +
-    `sweet spot &mdash; the expensive G-2 rate plus a spiky shape.</p>` +
+    `sweet spot: the expensive G-2 rate plus a spiky shape.</p>` +
     ((payload.towns || []).length
       ? `<p>Covers ${(payload.towns || [])
           .map((t) => `${esc(t.name)} (assessor FY ${esc(t.assess_fy)})`)
@@ -427,8 +428,8 @@ export function methodHTML(payload) {
   const foot =
     `Lineage: ${Object.values(payload.lineage || {}).map(esc).join(" &middot; ")}. ` +
     `Occupant names hand-resolved for ${esc(occ.top_n_resolved)} of ${esc(occ.top_n)} ` +
-    `top-ranked rows; the rest show the assessor's use description rather than the ` +
-    `owner of record.`;
+    `top-ranked rows. The rest show the assessor's use description, because the ` +
+    `owner of record is usually a holding company.`;
 
   return { prose, cannot, foot };
 }
@@ -596,9 +597,9 @@ export function lookupHTML(result, index) {
   if (result.kind === "empty") return "";
   if (result.kind === "outside") {
     return (
-      `<p class="reason">That address is in ${esc(result.town)}, and this screen ` +
-      `covers ${towns} only. It has not been screened &mdash; which is ` +
-      `different from screened out.</p>`
+      `<p class="reason">That address is in ${esc(result.town)}. This screen ` +
+      `covers ${towns}, and has not processed ${esc(result.town)} yet, so ` +
+      `there is no answer for it here.</p>`
     );
   }
   if (result.kind === "none") {
@@ -613,7 +614,7 @@ export function lookupHTML(result, index) {
   const head =
     result.kind === "exact"
       ? `<div class="eyebrow">Exact match</div>`
-      : `<div class="eyebrow">No exact match &middot; nearest addresses, approximate &mdash; check the street number</div>`;
+      : `<div class="eyebrow">No exact match &middot; nearest addresses, approximate, so check the street number</div>`;
   return `${head}<ul class="hits">${result.matches.map((e) => hitHTML(e, index)).join("")}</ul>`;
 }
 
@@ -686,11 +687,9 @@ function draw() {
         ? `No ${state.source === "comstock" ? "ComStock-backed" : "modelled-industrial"} ` +
           `site here is both on the expensive G-2 rate and spiky enough to clear ` +
           `1.4x its own average. The sweet spot is where an expensive tariff meets ` +
-          `a sharp peak, and this list has neither together. That is a real answer, ` +
-          `not a failure.`
+          `a sharp peak, and it needs both.`
         : `Every screened parcel in this list fell below 50 kW average demand, so ` +
-          `a 250 kW cabinet has no peak worth shaving. That is a real answer, not ` +
-          `a failure.`;
+          `a 250 kW cabinet has no peak worth shaving.`;
     $("#rows").innerHTML = `<tr><td colspan="7"><p class="reason">${why}</p></td></tr>`;
     $("#drawer").innerHTML = "";
   }
@@ -734,8 +733,8 @@ function applyTown(ranked) {
 function townFailureHTML(slug) {
   return (
     `<tr><td colspan="7"><p class="reason">The ranked list for ${esc(slug)} ` +
-    `could not be loaded. It is served as static data, so this is a network ` +
-    `problem rather than a problem with the data itself.</p></td></tr>`
+    `could not be loaded. It is served as static data, so the likely cause is ` +
+    `the network. Try again in a moment.</p></td></tr>`
   );
 }
 
@@ -758,8 +757,8 @@ async function boot() {
   } catch (err) {
     $("#rows").innerHTML =
       `<tr><td colspan="7"><p class="reason">The list of covered towns could ` +
-      `not be loaded. It is served as static data, so this is a network ` +
-      `problem rather than a problem with the data itself.</p></td></tr>`;
+      `not be loaded. It is served as static data, so the likely cause is the ` +
+      `network. Try again in a moment.</p></td></tr>`;
     return;
   }
   state.towns = index.towns || [];
@@ -779,7 +778,7 @@ async function boot() {
   } catch (err) {
     $("#method-prose").innerHTML =
       `<p class="reason">The method page could not be loaded. The ranked list ` +
-      `above is unaffected &mdash; it is served as separate static data.</p>`;
+      `above is unaffected, because it is served as separate static data.</p>`;
   }
 
   $("#rows").addEventListener("click", (e) => {
@@ -880,7 +879,7 @@ async function boot() {
     } catch (err) {
       out.innerHTML =
         `<p class="reason">The address index could not be loaded. The ranked list ` +
-        `and the map are unaffected &mdash; they are served as separate static data.</p>`;
+        `and the map are unaffected, because they are served as separate static data.</p>`;
     } finally {
       input.removeAttribute("aria-busy");
     }

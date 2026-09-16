@@ -148,7 +148,7 @@ def test_the_method_page_says_what_the_address_box_searches():
     assert "address_box_is_the_screen_only" in stated, sorted(stated)
     text = stated["address_box_is_the_screen_only"].lower()
     assert "residential" in text
-    assert "not screened" in text
+    assert "never screened" in text
 
 
 def test_the_class_shape_check_is_a_stated_limitation_not_a_gap():
@@ -157,7 +157,7 @@ def test_the_class_shape_check_is_a_stated_limitation_not_a_gap():
     stated = {l.key: l.statement for l in method.LIMITATIONS}
     assert "class_shape_check_is_modest" in stated, sorted(stated)
     text = stated["class_shape_check_is_modest"].lower()
-    for words in ("not validation", "2018", "modelled"):
+    for words in ("cannot validate", "2018", "modelled"):
         assert words in text, words
 
 

@@ -38,16 +38,16 @@ class Limitation:
 LIMITATIONS: tuple[Limitation, ...] = (
     Limitation(
         "no_measurement",
-        "This tool contains no per-building measurement. It is a structured "
-        "prior over three public assessor fields -- use code, building area, "
-        "municipality -- plus a modelled load-shape library. Use it to order a "
-        "call list, not to underwrite one.",
+        "This tool contains no per-building measurement. Every figure comes "
+        "from three public assessor fields (use code, building area and "
+        "municipality) run through a modelled load-shape library.",
     ),
     Limitation(
         "no_interconnection",
-        "Nothing here checks interconnection feasibility. Whether the utility "
-        "will permit a 250 kW resource at a given service is a study, not a "
-        "public dataset.",
+        "Nothing here checks interconnection feasibility. Whether the "
+        "utility will permit a 250 kW resource at a given service takes an "
+        "interconnection study to answer, and no public dataset carries the "
+        "result.",
     ),
     Limitation(
         "no_feeder_constraints",
@@ -58,8 +58,8 @@ LIMITATIONS: tuple[Limitation, ...] = (
     Limitation(
         "no_underwriting",
         "No figure here is an underwriting input. The savings estimate is a "
-        "ranking key expressed in dollars because dollars are orderable, not "
-        "because they are bankable.",
+        "ranking key, written in dollars because dollars sort. Nobody "
+        "should bank on it.",
     ),
     Limitation(
         "multi_tenant_overstated",
@@ -96,8 +96,7 @@ LIMITATIONS: tuple[Limitation, ...] = (
         f"The likely-single-metered proxy caps building area at "
         f"{LIKELY_SINGLE_METERED_MAX_SQFT:,} sq ft. Single-tenant distribution "
         "centres are routinely larger, so the one ICP sector ComStock covers "
-        "well is capped at MED confidence by this rule. That is a deliberate "
-        "trade, not an oversight.",
+        "well is capped at MED confidence by this rule.",
     ),
     Limitation(
         "clean_peak_not_quantified",
@@ -108,19 +107,20 @@ LIMITATIONS: tuple[Limitation, ...] = (
     ),
     Limitation(
         "customer_savings_not_developer_margin",
-        "The ranking is customer demand-charge savings. A developer's own "
-        "ranking is margin -- savings share minus cost to serve, including "
-        "service upgrades, wall availability, permitting and trucking -- and "
-        "those diverge.",
+        "The ranking is customer demand-charge savings. A developer ranks "
+        "on margin instead: savings share minus cost to serve, including "
+        "service upgrades, wall availability, permitting and trucking. The "
+        "two orderings diverge.",
     ),
     Limitation(
         "collapse_points",
-        "Two assessor use codes carry whole sectors inside them. Code 4000 is "
-        "every manufacturer in the state, so machine shops, metal fabricators, "
-        "food producers and commercial laundries are indistinguishable; code "
-        "4010 hides refrigerated cold storage inside ambient warehousing, and "
-        "the published intensity for those two differs by 5.6x. Within either "
-        "code the ranking is driven by floor area and rate class, not by shape.",
+        "Two assessor use codes carry whole sectors inside them. Code 4000 "
+        "is every manufacturer in the state, so machine shops, metal "
+        "fabricators, food producers and commercial laundries are "
+        "indistinguishable; code 4010 hides refrigerated cold storage "
+        "inside ambient warehousing, and the published intensity for those "
+        "two differs by 5.6x. Within either code, floor area and rate class "
+        "drive the ranking and load shape plays no part.",
     ),
     Limitation(
         "large_sites_still_rank_high",
@@ -128,7 +128,7 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "so the default order is led by large buildings that shave a small "
         "fraction of a big peak. Measured on Worcester, the top 60 by dollars "
         "shave a median 18.6% of their peak while the sweet-spot view shaves "
-        "71.6%. The two are shown separately rather than blended into a score.",
+        "71.6%. The two views stay separate, and no score blends them.",
     ),
     Limitation(
         "recharge_is_unconstrained_service_capacity_is_not_checked",
@@ -141,94 +141,99 @@ LIMITATIONS: tuple[Limitation, ...] = (
     ),
     Limitation(
         "peak_day_not_every_billed_day",
-        "The tariff bills the monthly maximum, so the threshold that matters "
-        "is the one holdable on every billed day of the month. The archetype "
-        "layer exposes one day per month -- that month's worst -- so the "
-        "threshold here is the peak day's alone. It is the right day to pick "
-        "if you may pick only one, because it carries the month's highest "
-        "peak. It is not a proof.",
+        "The tariff bills the monthly maximum, so the threshold that "
+        "matters is the one holdable on every billed day of the month. The "
+        "archetype layer exposes one day per month, that month's worst, so "
+        "the threshold here is the peak day's alone. It is the right day to "
+        "pick if you may pick only one, because it carries the month's "
+        "highest peak. A lower day with a longer plateau can still need "
+        "more energy.",
     ),
     Limitation(
         "day_chart_is_one_day",
-        "The day chart in the detail panel is one day: the worst billed day of "
-        "the month the battery works hardest. Inside 08:00-21:00 it is the "
-        "archetype's own fifteen-minute load. Overnight only the maximum is "
-        "known, not the shape, so it is drawn as a flat dashed line -- and "
-        "overnight load is not billed under this tariff at any magnitude.",
+        "The day chart in the detail panel is one day: the worst billed day "
+        "of the month the battery works hardest. Inside 08:00-21:00 it is "
+        "the archetype's own fifteen-minute load. Overnight, the build "
+        "keeps only the maximum and drops the shape, so the chart draws it "
+        "as a flat dashed line. Overnight load is not billed under this "
+        "tariff at any magnitude.",
     ),
     Limitation(
         "address_box_is_the_screen_only",
-        "The address box searches the commercial and industrial parcels this "
-        "screen looked at, by the assessor's own site address. A residential "
-        "parcel, a building recorded under a different street number, or an "
-        "address in a town not yet processed returns no match -- which means "
-        "not screened, not screened out.",
+        "The address box searches the commercial and industrial parcels "
+        "this screen looked at, by the assessor's own site address. A "
+        "residential parcel, a building recorded under a different street "
+        "number, or an address in a town not yet processed returns no "
+        "match. No match means the parcel was never screened. Whether the "
+        "site would pass is unknown.",
     ),
     Limitation(
         "siting_screens_out_only",
-        "The siting screen screens out the impossible and does not confirm the "
-        "possible. It measures the longest wall with ten feet of clearance to "
-        "the parcel line on MassGIS roof outlines, which include overhangs. It "
-        "cannot see loading docks, fire lanes, parking aisles, means of egress, "
-        "wall openings, local zoning setbacks or where the service entrance is. "
-        "A clear result is not a green light.",
+        "The siting screen screens out the impossible and does not confirm "
+        "the possible. It measures the longest wall with ten feet of "
+        "clearance to the parcel line on MassGIS roof outlines, which "
+        "include overhangs. It cannot see loading docks, fire lanes, "
+        "parking aisles, means of egress, wall openings, local zoning "
+        "setbacks or where the service entrance is. A clear result means "
+        "only that nothing ruled the site out.",
     ),
     Limitation(
         "class_shape_check_is_modest",
         "The class-shape check compares the ComStock-backed aggregate with "
-        "National Grid's published class average load shapes. It is a modest "
-        "sanity check, not validation: the class average is diversified across "
-        "many customers while the aggregate sums each archetype's own worst "
-        "billed day, ComStock's weather year is 2018 and the class shapes are a "
-        "later year, and it says nothing about the modelled industrial rows.",
+        "National Grid's published class average load shapes. It is a "
+        "modest sanity check and cannot validate the model: the class "
+        "average is diversified across many customers while the aggregate "
+        "sums each archetype's own worst billed day, ComStock's weather "
+        "year is 2018 and the class shapes are a later year, and it does "
+        "not cover the modelled industrial rows.",
     ),
     Limitation(
         "three_towns_not_the_design_docs_three",
-        "Three municipalities: Worcester, Fall River and Lowell. The design doc "
-        "named New Bedford and Chicopee alongside Worcester, but MassGIS's "
-        "electricity-provider layer lists New Bedford as Eversource and Chicopee "
-        "as a municipal light plant, so National Grid's G-2/G-3 tariff never "
-        "applies there. Fall River and Lowell, both National Grid mill cities, "
-        "replace them. Each town's figures come from its own assessor extract, "
-        "and the assessor year is shown per town.",
+        "Three municipalities: Worcester, Fall River and Lowell. New "
+        "Bedford and Chicopee were the original picks alongside Worcester, "
+        "but MassGIS's electricity-provider layer lists New Bedford as "
+        "Eversource and Chicopee as a municipal light plant, so National "
+        "Grid's G-2/G-3 tariff never applies there. Fall River and Lowell, "
+        "both National Grid mill cities, replace them. Each town's figures "
+        "come from its own assessor extract, and the assessor year is shown "
+        "per town.",
     ),
     Limitation(
         "occupant_candidates_are_drafted_then_verified",
-        "Occupant candidates are drafted by an agent and verified by a person "
-        "before anything is published. The agent runs one web-search-backed "
-        "request per row and writes three cells: a name, one source URL and "
-        "one sentence of evidence. It cannot set a row's status, so a "
-        "candidate reaches the published table only once a reviewer has "
-        "opened the source and initialled the row, and a candidate whose "
-        "source is not an openable URL is dropped rather than carried "
-        "forward. The drafted worksheet is committed at "
-        "data/occupant_candidates.csv, so the unverified research is as "
-        "browsable as the verified table.",
+        "Occupant candidates are drafted by an agent and verified by a "
+        "person before anything is published. The agent runs one "
+        "web-search-backed request per row and writes three cells: a name, "
+        "one source URL and one sentence of evidence. It cannot set a row's "
+        "status, so a candidate reaches the published table only once a "
+        "reviewer has opened the source and initialled the row, and a "
+        "candidate without an openable source URL is dropped. The drafted "
+        "worksheet is committed at data/occupant_candidates.csv, so the "
+        "unverified research is as browsable as the verified table.",
     ),
     Limitation(
         "sweet_spot_measures_seasonal_swing_not_intraday_shape",
-        "The sweet-spot view asks for the expensive G-2 rate plus a peak 1.4x "
-        "the site's own average, and that average is taken across the twelve "
-        "MONTHLY billed peaks. So it selects for seasonal swing, which in "
-        "Massachusetts means summer cooling, and not for the intraday inrush "
-        "the method elsewhere argues about. The two come apart on the "
-        "modelled-industrial list: its 463 rows run 1.10 to 1.22 against 1.14 "
-        "to 1.84 for the measured list, so none of them clears the floor and "
-        "the sweet-spot view of that list is empty in all three towns, "
-        "although 236 of those rows are on G-2. That is structural, not a "
-        "finding about the buildings. The modelled shapes carry no weather "
+        "The sweet-spot view asks for the expensive G-2 rate plus a peak "
+        "1.4x the site's own average, and that average is taken across the "
+        "twelve monthly billed peaks. So it selects for seasonal swing, "
+        "which in Massachusetts means summer cooling. The intraday inrush "
+        "the method argues about elsewhere is a different quantity, and "
+        "this filter cannot see it. The two come apart on the "
+        "modelled-industrial list: its 463 rows run 1.10 to 1.22 against "
+        "1.14 to 1.84 for the measured list, so none of them clears the "
+        "floor and the sweet-spot view of that list is empty in all three "
+        "towns, although 236 of those rows are on G-2. The emptiness is a "
+        "property of the filter. The modelled shapes carry no weather "
         "model, so their monthly peaks barely move. Read the modelled list "
-        "ranked by saving; the sweet-spot filter has nothing to say about it.",
+        "ranked by saving.",
     ),
     Limitation(
         "reason_sentences_are_templated",
-        "The sentence under each row is templated from the computed figures, "
-        "not written by a model. The design doc asked for a written "
-        "justification replacing the template. A generated sentence would read "
-        "better and would occasionally be wrong about arithmetic this page can "
-        "prove, and unlike an occupant name there is no verification step for "
-        "prose. The template states only what the scorer computed, which is "
-        "the claim the page can stand behind.",
+        "The sentence under each row is templated from the computed "
+        "figures. No model writes it. A generated sentence would read "
+        "better and would occasionally be wrong about arithmetic this page "
+        "can prove, and unlike an occupant name there is no verification "
+        "step for prose. The template states only what the scorer computed, "
+        "which is the claim the page can stand behind.",
     ),
 )
 
@@ -238,11 +243,11 @@ LIMITATIONS: tuple[Limitation, ...] = (
 KNOWN_GAPS: tuple[Limitation, ...] = (
     Limitation(
         "occupant_resolution_partial",
-        "Only part of the head of the ranking has had its operating business "
-        "resolved. The assessor's owner of record is a holding company "
-        "for roughly half the top 50, so an unresolved row shows no occupant "
-        "rather than showing the owner in its place. The count above is the "
-        "number actually resolved today, not a target.",
+        "Only part of the head of the ranking has had its operating "
+        "business resolved. The assessor's owner of record is a holding "
+        "company for roughly half the top 50, so an unresolved row leaves "
+        "the occupant blank. Showing the holding company there would name "
+        "the wrong business. The count above is the number resolved today.",
     ),
 )
 
@@ -350,9 +355,9 @@ def method_payload(
         },
         "regression": regression
         if regression is not None
-        else {"status": "not yet run; the figures below are unreported, not zero"},
+        else {"status": "not yet run, so there are no figures to report"},
         "calibration": calibration
         if calibration is not None
-        else {"status": "not yet run; the result is unreported, not failed"},
+        else {"status": "not yet run, so there is no result to report"},
         "towns": list(towns or []),
     }
