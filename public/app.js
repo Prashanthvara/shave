@@ -2,7 +2,8 @@
 // scripts/build_site.py, so what is on screen is provably what the scorer
 // produced. The only arithmetic here is scaling a normalised series to pixels.
 
-const SUPPORTED_MAJOR = "1";
+// 2: the page loads index.json, then one ranked payload per town.
+const SUPPORTED_MAJOR = "2";
 
 export function fmtMoney(n) {
   return "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
@@ -585,6 +586,7 @@ function hitHTML(entry, index) {
   // Only a ranked parcel has a row to jump to. Anything else is a statement.
   return entry.status === "ranked"
     ? `<li><button type="button" class="hit" data-id="${esc(entry.loc_id)}" ` +
+        `data-town="${esc(entry.town || "")}" ` +
         `data-list="${esc(entry.list)}">${body}</button></li>`
     : `<li><div class="hit">${body}</div></li>`;
 }
@@ -633,6 +635,8 @@ const state = {
   viewBox: "0 0 620 818",
   dayAxis: null,
   sitingRule: null,
+  towns: [],
+  town: null,
 };
 
 const WHY_SPLIT =
@@ -698,43 +702,71 @@ function applyFilters() {
   draw();
 }
 
-async function boot() {
-  let ranked;
-  try {
-    ranked = await (await fetch("/data/ranked.json")).json();
-  } catch (err) {
-    $("#rows").innerHTML =
-      `<tr><td colspan="7"><p class="reason">The ranked list could not be loaded. ` +
-      `It is served as static data, so this is a network problem rather than a ` +
-      `problem with the data itself.</p></td></tr>`;
-    return;
-  }
+// One town's payload. The map frame, the day axis and the siting rule are all
+// per-town, so switching town replaces them together rather than patching one.
+async function loadTown(slug) {
+  const ranked = await (await fetch(`/data/towns/${slug}/ranked.json`)).json();
   if (String(ranked.site_schema_version || "").split(".")[0] !== SUPPORTED_MAJOR) {
-    $("#rows").innerHTML =
-      `<tr><td colspan="7"><p class="reason">This page was built for schema ` +
-      `${SUPPORTED_MAJOR}.x and the data is ${esc(ranked.site_schema_version)}. ` +
-      `Refusing to render rather than draw wrong numbers.</p></td></tr>`;
-    return;
+    throw new Error(`payload schema ${ranked.site_schema_version} is not supported`);
   }
+  return ranked;
+}
 
+function applyTown(ranked) {
   state.lists = ranked.lists;
   state.viewBox = (ranked.map || {}).view_box || "0 0 620 818";
   state.dayAxis = ranked.day_axis || null;
   state.sitingRule = ranked.siting_rule || null;
-  const c = ranked.counts;
-  $("#counts").textContent =
-    `${c.parcels_in.toLocaleString()} parcels screened · ` +
-    `${c.kept.toLocaleString()} in band · ` +
-    `${c.sweet_spot.toLocaleString()} in the sweet spot · ` +
-    `showing top ${c.exported.comstock} measured and ${c.exported.modeled} modelled`;
-  $("#whysplit").textContent = WHY_SPLIT;
+  state.town = ranked.town || null;
+  state.selected = null;
+  $("#counts").textContent = countsLine(ranked.counts);
   // The assessor vintage comes from the export's town block, not from the
   // method payload: `score_parcels` output carries no assess_fy -- that field
   // lives on the parcel frame -- so method.coverage.assess_years is empty.
   // Reading it here also shows the vintage before method.json has loaded.
   const fy = (ranked.town || {}).assess_fy;
-  $("#vintage").textContent = fy ? `Assessor FY ${fy}` : "Assessor vintage unavailable";
+  $("#vintage").textContent = fy
+    ? `${ranked.town.name} · Assessor FY ${fy}`
+    : "Assessor vintage unavailable";
   applyFilters();
+}
+
+function townFailureHTML(slug) {
+  return (
+    `<tr><td colspan="7"><p class="reason">The ranked list for ${esc(slug)} ` +
+    `could not be loaded. It is served as static data, so this is a network ` +
+    `problem rather than a problem with the data itself.</p></td></tr>`
+  );
+}
+
+async function switchTown(slug) {
+  $$("#towns button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.slug === slug)),
+  );
+  try {
+    applyTown(await loadTown(slug));
+  } catch (err) {
+    $("#rows").innerHTML = townFailureHTML(slug);
+    $("#drawer").innerHTML = "";
+  }
+}
+
+async function boot() {
+  let index;
+  try {
+    index = await (await fetch("/data/index.json")).json();
+  } catch (err) {
+    $("#rows").innerHTML =
+      `<tr><td colspan="7"><p class="reason">The list of covered towns could ` +
+      `not be loaded. It is served as static data, so this is a network ` +
+      `problem rather than a problem with the data itself.</p></td></tr>`;
+    return;
+  }
+  state.towns = index.towns || [];
+  const slug = index.default || (state.towns[0] || {}).slug;
+  $("#towns").innerHTML = townButtonsHTML(state.towns, slug);
+  $("#whysplit").textContent = WHY_SPLIT;
+  await switchTown(slug);
 
   try {
     state.method = await (await fetch("/data/method.json")).json();
@@ -753,6 +785,10 @@ async function boot() {
   $("#rows").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-id]");
     if (tr) select(tr.dataset.id);
+  });
+  $("#towns").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-slug]");
+    if (b && b.getAttribute("aria-pressed") !== "true") switchTown(b.dataset.slug);
   });
   $("#rows").addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -816,9 +852,11 @@ async function boot() {
     return idx;
   }
 
-  // A ranked match opens in the list it belongs to. The lists are never merged,
-  // so the source toggle moves to that list rather than the row joining this one.
-  function jumpTo(list, id) {
+  // A ranked match opens in the list it belongs to, and in the town it is in.
+  // The lists are never merged and the towns are never merged, so the toggles
+  // move to that row rather than the row joining this view.
+  async function jumpTo(list, id, town) {
+    if (town && state.town && town !== state.town.slug) await switchTown(town);
     $(list === "modeled" ? "#src-md" : "#src-cs").click();
     $("#view-all").click();
     select(id);
@@ -849,7 +887,7 @@ async function boot() {
   });
   $("#lookup-result").addEventListener("click", (e) => {
     const hit = e.target.closest("button.hit[data-id]");
-    if (hit) jumpTo(hit.dataset.list, hit.dataset.id);
+    if (hit) jumpTo(hit.dataset.list, hit.dataset.id, hit.dataset.town);
   });
 
   $$(".tab").forEach((t) =>
