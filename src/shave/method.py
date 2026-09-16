@@ -193,6 +193,34 @@ LIMITATIONS: tuple[Limitation, ...] = (
         "and the assessor year is shown per town.",
     ),
     Limitation(
+        "occupant_candidates_are_drafted_then_verified",
+        "Occupant candidates are drafted by an agent and verified by a person "
+        "before anything is published. The agent runs one web-search-backed "
+        "request per row and writes three cells: a name, one source URL and "
+        "one sentence of evidence. It cannot set a row's status, so a "
+        "candidate reaches the published table only once a reviewer has "
+        "opened the source and initialled the row, and a candidate whose "
+        "source is not an openable URL is dropped rather than carried "
+        "forward. The drafted worksheet is committed at "
+        "data/occupant_candidates.csv, so the unverified research is as "
+        "browsable as the verified table.",
+    ),
+    Limitation(
+        "sweet_spot_measures_seasonal_swing_not_intraday_shape",
+        "The sweet-spot view asks for the expensive G-2 rate plus a peak 1.4x "
+        "the site's own average, and that average is taken across the twelve "
+        "MONTHLY billed peaks. So it selects for seasonal swing, which in "
+        "Massachusetts means summer cooling, and not for the intraday inrush "
+        "the method elsewhere argues about. The two come apart on the "
+        "modelled-industrial list: its 463 rows run 1.10 to 1.22 against 1.14 "
+        "to 1.84 for the measured list, so none of them clears the floor and "
+        "the sweet-spot view of that list is empty in all three towns, "
+        "although 236 of those rows are on G-2. That is structural, not a "
+        "finding about the buildings. The modelled shapes carry no weather "
+        "model, so their monthly peaks barely move. Read the modelled list "
+        "ranked by saving; the sweet-spot filter has nothing to say about it.",
+    ),
+    Limitation(
         "reason_sentences_are_templated",
         "The sentence under each row is templated from the computed figures, "
         "not written by a model. The design doc asked for a written "
@@ -215,19 +243,6 @@ KNOWN_GAPS: tuple[Limitation, ...] = (
         "for roughly half the top 50, so an unresolved row shows no occupant "
         "rather than showing the owner in its place. The count above is the "
         "number actually resolved today, not a target.",
-    ),
-    Limitation(
-        "occupant_candidates_are_drafted_then_verified",
-        "Occupant candidates are drafted by an agent and verified by a person "
-        "before anything is published. The agent runs one web-search-backed "
-        "request per row and writes three cells: a name, one source URL and "
-        "one sentence of evidence. It cannot set a row's status, so a "
-        "candidate reaches the published table only once a reviewer has "
-        "opened the source and initialled the row, and a candidate whose "
-        "source is not an openable URL is dropped rather than carried "
-        "forward. The drafted worksheet is committed at "
-        "data/occupant_candidates.csv, so the unverified research is as "
-        "browsable as the verified table.",
     ),
 )
 
