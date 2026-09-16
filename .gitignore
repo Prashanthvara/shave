@@ -43,3 +43,5 @@ node_modules/
 public/data/
 public/ranked.json
 docs/
+.claude/
+CLAUDE.md

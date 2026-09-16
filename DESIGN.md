@@ -1,15 +1,13 @@
 ---
 name: Shave
 mode: hybrid            # ranked view = OPERATE, method page = READ
-extracted_from: ~/.gstack/projects/powertown/designs/shave-ranked-map-20260910/shave-mockup.html
-artifact: https://claude.ai/code/artifact/f8df96c7-9348-4bac-a596-8996b07ff007
 date: 2026-09-10
 ---
 
-# Shave — design system
+# Shave, the design system
 
-Extracted from the approved mockup during `/plan-design-review`. The mockup is the
-reference implementation; this file is the vocabulary.
+Extracted from the approved mockup. The mockup is the reference
+implementation; this file is the vocabulary.
 
 ## Stance
 
@@ -25,7 +23,7 @@ utility tariff sheets. That is where the colour language comes from.
 Tokens are defined on bare `:root` (light), then redefined under
 `@media (prefers-color-scheme: dark)` guarded as `:root:not([data-theme="light"])`,
 then again under `:root[data-theme="dark"]`. Never style a component inside a theme
-block — always through the token.
+block. Always go through the token.
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
@@ -62,7 +60,7 @@ not Inter or Space Grotesk.
 | Panel title | Plex Sans 600 | 12px | |
 | Body / reason | Plex Sans 400 | 13.5px | `max-width: 56ch` |
 | Table data | Plex Sans 400 | 13px | |
-| Numbers | **Plex Mono** 500 | 13.5px | `font-variant-numeric: tabular-nums` — always |
+| Numbers | **Plex Mono** 500 | 13.5px | `font-variant-numeric: tabular-nums`, always |
 | Eyebrow / label | Plex Mono 400 | 10.5px | uppercase, `letter-spacing: .1em` |
 | Chip | Plex Mono 400 | 9.5px | uppercase, `letter-spacing: .07em` |
 
@@ -72,7 +70,7 @@ bearings and rate codes are all mono.
 ## Layout
 
 Split view: map `55fr`, ranked table `45fr`, `gap: 16px`. Below 900px it becomes one
-column **and the ranked list is ordered first** — the map follows. The payload leads on
+column **and the ranked list is ordered first**, with the map following. The payload leads on
 the device most likely to open a cold link.
 
 Radius is `3px` everywhere. **There are no shadows in this system.** Separation comes from
@@ -106,5 +104,5 @@ Utility language. Orientation, status, action. Never mood.
 
 Empty states state a finding, not an absence: *"Every screened parcel fell below 50 kW
 average demand, so a 250 kW cabinet has no peak worth shaving. That is a real answer, not
-a failure."* Errors say what is still working: *"The ranked list is unaffected — it is
+a failure."* Errors say what is still working: *"The ranked list is unaffected, it is
 served as static data. Only free-text address search is down."*

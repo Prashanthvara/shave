@@ -78,6 +78,10 @@ src/shave/
 - **NREL ComStock** end-use load profiles, queried in place from `s3://oedi-data-lake`
 - **National Grid MECO** filed tariff and published class average load shapes
 
+The code here is MIT licensed. The data is not mine to license: each source
+above keeps its own terms, and the assessor extracts and the ComStock cache
+are downloaded at build time rather than redistributed from this repository.
+
 ## Known limits
 
 - Multi-tenant buildings are overstated. Demand accrues to a service account, not
